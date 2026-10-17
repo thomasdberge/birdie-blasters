@@ -1,0 +1,2142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<style>[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Birdie Blasters</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=Lilita+One&family=Rubik:wght@400;600;800&display=swap">
+<style>
+/* Layout: full-bleed 3D course; the HUD hugs the corners like a rangefinder readout; a paper scorecard slides over between holes */
+:root{
+  --olive:#2b3720;
+  --olive-2:#3a4a2b;
+  --line:#62744b;
+  --blaze:#ff6b17;
+  --blaze-deep:#c24a06;
+  --blaze-ink:#2a1100;
+  --fill:#ffd447;
+  --cream:#f2eed6;
+  --muted:#c3c8a4;
+  --paper:#f7f6ee;
+  --paper-2:#e8eed9;
+  --win:#fff0bf;
+  --ink:#1b2214;
+  --grid:#bcc6a6;
+  --print:#2f5a2c;
+  --print-soft:#5d7352;
+  --sky-top:#73bdee;
+  --sky-bottom:#d6eff3;
+  --scrim:rgba(24,31,17,.58);
+  --shadow:rgba(10,14,6,.45);
+  --outline:2px 0 0 var(--ink),-2px 0 0 var(--ink),0 2px 0 var(--ink),0 -2px 0 var(--ink),2px 2px 0 var(--ink),-2px 2px 0 var(--ink),2px -2px 0 var(--ink),-2px -2px 0 var(--ink),0 5px 0 var(--ink);
+  --outline-sm:1px 0 0 var(--ink),-1px 0 0 var(--ink),0 1px 0 var(--ink),0 -1px 0 var(--ink),0 2px 3px var(--shadow);
+  --outline-big:3px 0 0 var(--ink),-3px 0 0 var(--ink),0 3px 0 var(--ink),0 -3px 0 var(--ink),3px 3px 0 var(--ink),-3px 3px 0 var(--ink),3px -3px 0 var(--ink),-3px -3px 0 var(--ink),0 8px 0 var(--ink);
+  --font-display:"Lilita One","Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
+  --font-ui:"Rubik",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --font-data:"Chakra Petch",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+html{box-sizing:border-box;height:100%;background:var(--sky-top)}
+*,*::before,*::after{box-sizing:inherit}
+body{height:100%;margin:0;background:linear-gradient(180deg,var(--sky-top),var(--sky-bottom) 72%);color:var(--cream);font-family:var(--font-ui);font-size:14px;overflow:hidden;overscroll-behavior:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none;touch-action:manipulation}
+#app{position:relative;height:100%;overflow:hidden}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;outline:none}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
+
+/* ---------- HUD ---------- */
+.hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;gap:10px;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.hud-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.holecard{pointer-events:auto;text-align:left;background:var(--olive);border:2px solid var(--line);border-radius:14px;padding:9px 12px 10px;min-width:0;max-width:min(60vw,250px);display:grid;gap:2px;box-shadow:0 4px 0 var(--shadow)}
+.hc-row{display:flex;gap:10px;align-items:baseline;font-family:var(--font-data);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.hc-row b{font-size:16px;color:var(--cream)}
+.hc-of{opacity:.75}
+.hc-name{display:block;font-family:var(--font-display);font-size:20px;line-height:1.1;color:var(--cream)}
+.hc-player{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;margin-top:5px;min-width:0}
+.hc-player span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{width:12px;height:12px;border-radius:50%;flex:none;background:var(--blaze);box-shadow:0 0 0 2px var(--olive),0 0 0 3.5px var(--cream)}
+.hc-stats{display:flex;gap:12px;font-family:var(--font-data);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:1px}
+.hc-stats b{font-size:17px;color:var(--cream);font-weight:700}
+.hud-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:auto}
+#map{width:104px;height:148px;border-radius:12px;border:2px solid var(--line);background:var(--olive);box-shadow:0 4px 0 var(--shadow);display:block}
+.mini{white-space:nowrap;background:var(--olive);border:2px solid var(--line);border-radius:999px;padding:5px 11px;font-size:12px;font-weight:600;box-shadow:0 3px 0 var(--shadow)}
+.mini[aria-pressed="true"]#zoomBtn{background:var(--blaze);border-color:var(--blaze);color:var(--blaze-ink)}
+.mini:disabled{opacity:.55;cursor:default}
+.mini-row{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+
+/* First-person reticle: crosshair, elevation ladder and rangefinder readout */
+.reticle{position:absolute;inset:0;pointer-events:none}
+.ret-svg{position:absolute;left:50%;top:50%;width:120px;height:120px;transform:translate(-50%,-50%);overflow:visible}
+.ret-svg circle,.ret-svg path{fill:none}
+.ret-under circle,.ret-under path{stroke:var(--ink);stroke-width:4.5;opacity:.5}
+.ret-over circle,.ret-over path{stroke:var(--cream);stroke-width:2}
+.ret-over .dot{fill:var(--cream);stroke:none}
+.reticle.locked .ret-over circle,.reticle.locked .ret-over path{stroke:var(--blaze)}
+.reticle.locked .ret-over .dot{fill:var(--blaze)}
+.ret-move{position:absolute;inset:0}
+.rl-cap{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ret-ladder{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:46%;transform:translateY(-50%);display:grid;justify-items:center;gap:5px;font-family:var(--font-data);font-size:11px;font-weight:700;color:var(--cream);text-shadow:var(--outline-sm);font-variant-numeric:tabular-nums}
+.rl-bar{position:relative;display:block;width:6px;height:92px;border-radius:3px;background:var(--scrim);box-shadow:inset 0 0 0 1.5px var(--cream)}
+.rl-bar b{position:absolute;left:50%;bottom:50%;width:18px;height:5px;border-radius:3px;background:var(--fill);transform:translate(-50%,50%);box-shadow:0 0 0 1.5px var(--ink)}
+.ret-read{position:absolute;left:50%;top:calc(50% + 64px);transform:translateX(-50%);display:grid;justify-items:center;gap:1px;font-family:var(--font-data);font-weight:700;color:var(--cream);text-shadow:var(--outline-sm);white-space:nowrap}
+.ret-read b{font-size:20px;font-variant-numeric:tabular-nums}
+.ret-read span{font-size:13px;letter-spacing:.04em}
+
+.hud-bottom{display:grid;gap:8px;justify-items:center}
+.toast{pointer-events:none;max-width:min(92%,420px);text-align:center;background:var(--scrim);color:var(--cream);font-weight:600;font-size:13.5px;line-height:1.35;border-radius:10px;padding:7px 12px;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
+.toast.show{opacity:1;transform:none}
+/* Golf bag: opens at the start of every turn with the recommended weapon marked */
+.pick{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;padding-block:0 14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.pick-card{pointer-events:auto;width:min(100%,780px);max-height:62vh;overflow-y:auto;background:var(--olive);border:2px solid var(--line);border-radius:18px;padding:12px 12px 10px;box-shadow:0 6px 0 var(--shadow);display:grid;gap:12px}
+.pick-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px}
+.pick-head h2{margin:0;font-family:var(--font-display);font-weight:400;font-size:24px;line-height:1.05;color:var(--cream)}
+.pick-head p{margin:0;font-family:var(--font-data);font-size:12.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.bag{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 8px;padding-top:4px}
+.bagitem{position:relative;display:grid;align-content:start;gap:3px;text-align:left;background:var(--olive-2);border:2px solid var(--line);border-radius:12px;padding:8px 10px 9px;box-shadow:0 3px 0 var(--shadow);min-width:0;color:var(--cream)}
+.bagitem:hover{border-color:var(--cream)}
+.bi-top{display:flex;justify-content:space-between;align-items:center;gap:6px;font-family:var(--font-data);font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.bi-key{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:5px;background:var(--olive);color:var(--cream);font-size:11px;letter-spacing:0}
+.bi-name{font-weight:800;font-size:15px;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bi-row{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.bi-range{font-family:var(--font-data);font-size:12.5px;font-weight:700;font-variant-numeric:tabular-nums}
+.bi-range small{font-size:10.5px;color:var(--blaze);margin-left:3px}
+.bi-pips{display:flex;gap:2px}
+.bi-pips i{width:5px;height:9px;border-radius:2px;background:var(--line)}
+.bi-pips i.on{background:var(--fill)}
+.bi-fx{font-size:11.5px;line-height:1.3;color:var(--muted)}
+.bi-rec{position:absolute;top:-10px;right:8px;background:var(--blaze);color:var(--blaze-ink);font-family:var(--font-data);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:2px 6px;border-radius:6px;box-shadow:0 0 0 2px var(--olive)}
+.bagitem.rec{border-color:var(--blaze)}
+.bagitem[aria-checked="true"]{background:var(--blaze);border-color:var(--blaze);color:var(--blaze-ink)}
+.bagitem[aria-checked="true"] .bi-top,.bagitem[aria-checked="true"] .bi-fx{color:var(--blaze-ink)}
+.bagitem[aria-checked="true"] .bi-pips i{background:rgba(42,17,0,.25)}
+.bagitem[aria-checked="true"] .bi-pips i.on{background:var(--blaze-ink)}
+.bagitem[aria-checked="true"] .bi-range small{color:var(--blaze-ink)}
+.bagitem[aria-checked="true"] .bi-rec{background:var(--blaze-ink);color:var(--fill)}
+.pick-foot{margin:0;font-size:12.5px;color:var(--muted);text-align:center}
+@media (max-width:620px){.bag{grid-template-columns:repeat(2,minmax(0,1fr))}.pick-foot,.bi-fx{display:none}.pick-head h2{font-size:21px}.bagitem{padding:7px 9px 8px}}
+#hud.picking .hud-bottom{display:none}
+#hud.mousemode .controls{display:none}
+.lockprompt{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);pointer-events:auto;background:var(--blaze);color:var(--blaze-ink);border:0;border-radius:14px;padding:13px 20px 14px;font-family:var(--font-display);font-size:22px;line-height:1;box-shadow:0 5px 0 var(--blaze-deep)}
+.ret-power-bg{fill:none;stroke:var(--ink);stroke-width:7;opacity:0}
+.ret-power{fill:none;stroke:var(--fill);stroke-width:4.5;stroke-linecap:round}
+.reticle.charging .ret-power-bg{opacity:.45}
+.hc-wind{display:flex;flex-wrap:wrap;align-items:center;column-gap:6px;row-gap:1px;white-space:nowrap;font-family:var(--font-data);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.hc-wind b{font-size:14px;color:var(--cream)}
+.wind-arrow{width:18px;height:18px;flex:none;fill:var(--fill);stroke:var(--ink);stroke-width:1.2;transition:transform .25s}
+.hc-windrel{color:var(--cream);font-weight:700}
+.choose{pointer-events:auto;display:grid;gap:8px;justify-items:center;width:100%;max-width:520px;background:var(--olive);border:2px solid var(--line);border-radius:16px;padding:10px 12px 12px;box-shadow:0 4px 0 var(--shadow)}
+.choose-q{margin:0;font-weight:700;font-size:15px;color:var(--cream);text-align:center}
+.choose-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;width:100%}
+.cbtn{display:grid;justify-items:center;gap:1px;background:var(--olive-2);border:2px solid var(--line);border-radius:12px;padding:8px 4px 9px;box-shadow:0 3px 0 var(--shadow)}
+.cbtn b{font-family:var(--font-display);font-weight:400;font-size:26px;line-height:1;color:var(--fill)}
+.cbtn span{font-family:var(--font-data);font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+.cbtn small{font-size:11.5px;color:var(--muted)}
+.cbtn:hover,.cbtn:focus-visible{border-color:var(--blaze)}
+.controls{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;max-width:560px;width:100%}
+.pad{display:flex;gap:6px;flex:1;min-width:0}
+.aimbtn{pointer-events:auto;flex:1 1 0;min-width:40px;max-width:56px;height:56px;border-radius:14px;background:var(--olive);border:2px solid var(--line);display:grid;place-items:center;box-shadow:0 3px 0 var(--shadow);touch-action:none;color:var(--cream);padding:0}
+.aimbtn svg{width:22px;height:22px}
+.hint{pointer-events:none;max-width:min(100%,460px);text-align:center;font-size:12.5px;line-height:1.35;color:var(--cream);background:var(--scrim);border-radius:10px;padding:6px 10px;text-wrap:balance}
+.fire{pointer-events:auto;position:relative;overflow:hidden;width:116px;height:66px;flex:none;border:0;border-radius:18px;background:var(--blaze);color:var(--blaze-ink);box-shadow:0 5px 0 var(--blaze-deep);touch-action:none;display:grid;place-content:center;transition:transform .06s,box-shadow .06s}
+.fire .fill{position:absolute;left:0;right:0;bottom:0;height:0%;background:var(--fill)}
+.fire .f-lbl{position:relative;font-family:var(--font-display);font-size:26px;line-height:1;text-transform:uppercase;letter-spacing:.02em}
+.fire .f-sub{position:relative;font-family:var(--font-data);font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-variant-numeric:tabular-nums}
+.fire.charging{transform:translateY(3px);box-shadow:0 2px 0 var(--blaze-deep)}
+.fire:disabled,.aimbtn:disabled{opacity:.5;cursor:default}
+
+.banner{position:absolute;left:0;right:0;top:23%;text-align:center;font-family:var(--font-display);font-size:clamp(30px,8vw,46px);line-height:1;opacity:0;transform:translateY(-8px) scale(.96);transition:opacity .25s,transform .25s;pointer-events:none;padding-inline:16px;text-shadow:var(--outline);color:var(--cream)}
+.banner small{display:block;font-family:var(--font-data);font-weight:700;font-size:14px;letter-spacing:.06em;color:var(--cream);margin-top:10px;text-shadow:0 2px 3px var(--shadow),0 0 2px var(--ink)}
+.banner.show{opacity:1;transform:none}
+.callout{position:absolute;left:0;right:0;top:34%;text-align:center;pointer-events:none;padding-inline:16px;opacity:0}
+.co-big{font-family:var(--font-display);font-size:clamp(44px,13vw,86px);line-height:.95;color:var(--blaze);text-shadow:var(--outline-big)}
+.co-small{margin:12px auto 0;max-width:30ch;font-weight:600;font-size:16px;line-height:1.35;color:var(--cream);text-shadow:0 2px 4px var(--shadow),0 0 2px var(--ink),0 0 2px var(--ink)}
+.callout.show{animation:pop 2.6s ease-out forwards}
+@keyframes pop{0%{opacity:0;transform:scale(.4) rotate(-6deg)}10%{opacity:1;transform:scale(1.12) rotate(2deg)}18%{transform:scale(1) rotate(0)}82%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
+
+/* ---------- Screens ---------- */
+.screen{position:absolute;inset:0;overflow-y:auto;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--scrim)}
+.panel{width:min(100%,440px);background:var(--olive);border:2px solid var(--line);border-radius:22px;padding:22px 20px 20px;box-shadow:0 8px 0 var(--shadow);display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.kicker{margin:0;font-family:var(--font-data);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.logo{margin:-4px 0 0;font-family:var(--font-display);font-weight:400;font-size:clamp(50px,15vw,70px);line-height:.9;color:var(--blaze);text-shadow:0 5px 0 var(--blaze-ink);letter-spacing:.01em}
+.lede{margin:0;font-size:15px;line-height:1.45;color:var(--cream);max-width:60ch}
+.label{font-family:var(--font-data);font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.field{display:grid;gap:7px}
+.seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.seg button{background:var(--olive-2);border:2px solid var(--line);border-radius:10px;padding:7px 0 8px;font-family:var(--font-display);font-size:21px;line-height:1}
+.seg button[aria-checked="true"]{background:var(--blaze);border-color:var(--blaze);color:var(--blaze-ink)}
+.names{display:grid;gap:8px}
+.nrow{display:flex;align-items:center;gap:10px}
+.nrow .chip{width:14px;height:14px}
+.nrow input{flex:1 1 0;width:0;min-width:0;background:var(--olive-2);border:2px solid var(--line);border-radius:10px;padding:9px 11px;color:var(--cream);font:600 15px var(--font-ui);-webkit-user-select:text;user-select:text}
+.nrow input:focus{outline:none;border-color:var(--blaze)}
+.nrow .hat{font-family:var(--font-data);font-size:11px;font-weight:700;color:var(--muted);width:84px;text-transform:uppercase;letter-spacing:.06em;line-height:1.2}
+.rules{margin:0;padding:12px 14px 12px 30px;background:var(--olive-2);border-radius:12px;display:grid;gap:6px;font-size:13.5px;line-height:1.4;color:var(--cream)}
+.rules b{color:var(--fill);font-weight:600}
+.btn-primary{background:var(--blaze);color:var(--blaze-ink);border:0;border-radius:14px;padding:13px 18px 14px;font-family:var(--font-display);font-size:22px;line-height:1;box-shadow:0 5px 0 var(--blaze-deep)}
+.btn-primary:active{transform:translateY(3px);box-shadow:0 2px 0 var(--blaze-deep)}
+.btn-ghost{background:transparent;border:2px solid var(--print);color:var(--print);border-radius:14px;padding:11px 16px;font-weight:700;font-size:15px}
+.err{margin:0;padding:10px 12px;border-radius:10px;background:var(--blaze);color:var(--blaze-ink);font-weight:600;line-height:1.4}
+
+.scorecard{width:min(100%,520px);background:var(--paper);color:var(--ink);border-radius:16px;padding:20px 18px 18px;box-shadow:0 8px 0 var(--shadow);display:grid;gap:12px}
+.sc-head h2{margin:0;font-family:var(--font-display);font-weight:400;font-size:30px;line-height:1.05;color:var(--print);text-wrap:balance}
+.sc-head p{margin:5px 0 0;font-size:14.5px;line-height:1.4;color:var(--print-soft)}
+.sc-wrap{overflow-x:auto}
+table.sc{width:100%;border-collapse:collapse;font-family:var(--font-data);font-variant-numeric:tabular-nums;font-size:15px;font-weight:700}
+.sc th,.sc td{border:1px solid var(--grid);padding:5px 4px;text-align:center;min-width:36px;height:38px}
+.sc thead th{background:var(--print);color:var(--paper);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;border-color:var(--print)}
+.sc tr.par th,.sc tr.par td{background:var(--paper-2);font-size:13px;color:var(--print-soft)}
+.sc tbody th{text-align:left;font-family:var(--font-ui);font-weight:600;font-size:14px;white-space:nowrap;padding-inline:8px}
+.sc tbody th .chip{display:inline-block;vertical-align:-1px;margin-right:8px;width:10px;height:10px;box-shadow:0 0 0 1.5px var(--ink)}
+.sc tr.lead th,.sc tr.lead td{background:var(--win)}
+.mk{display:inline-grid;place-items:center;width:27px;height:27px;line-height:1}
+.mk.u1{border:2px solid var(--print);border-radius:50%}
+.mk.u2{border:2px solid var(--print);border-radius:50%;box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--print)}
+.mk.o1{border:2px solid var(--ink)}
+.mk.o2{border:2px solid var(--ink);box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--ink)}
+.sc-legend{margin:0;display:flex;gap:14px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--print-soft)}
+.sc-legend .mk{width:16px;height:16px;margin-right:5px;vertical-align:middle}
+.sc-actions{display:flex;gap:10px;flex-wrap:wrap}
+.sc-actions .btn-primary{flex:1}
+
+@media (prefers-reduced-motion:reduce){
+  .callout.show{animation:fade 2.6s linear forwards}
+  @keyframes fade{0%{opacity:0}8%{opacity:1}85%{opacity:1}100%{opacity:0}}
+  .banner,.toast{transition:none}
+}
+</style>
+
+<div id="app">
+  <canvas id="c" aria-label="The golf course in 3D"></canvas>
+
+  <div id="hud" class="hud" hidden>
+    <div class="hud-top">
+      <button id="holeCard" class="holecard" type="button" aria-label="Show the scorecard">
+        <span class="hc-row"><span>Hole <b id="hcHole">1</b><span class="hc-of">/3</span></span><span>Par <b id="hcPar">3</b></span></span>
+        <span class="hc-name" id="hcName">Warm-Up</span>
+        <span class="hc-player"><i class="chip" id="hcChip"></i><span id="hcPlayer">Player</span></span>
+        <span class="hc-stats"><span>Stroke <b id="hcStroke">1</b></span><span><b id="hcDist">0</b> m to go</span></span>
+        <span class="hc-wind"><svg id="windArrow" class="wind-arrow" viewBox="-10 -10 20 20" aria-hidden="true"><path d="M0-8 6 1H2V8H-2V1H-6Z"/></svg><span>Wind <b id="hcWind">0.0</b> m/s</span><span class="hc-windrel" id="hcWindRel"></span></span>
+      </button>
+      <div class="hud-right">
+        <canvas id="map" aria-label="Map of the hole"></canvas>
+        <div class="mini-row">
+          <button id="bagBtn" class="mini" type="button">Switch weapon</button>
+          <button id="zoomBtn" class="mini" type="button" aria-pressed="false">Zoom 1×</button>
+          <button id="muteBtn" class="mini" type="button">Sound on</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="reticle" class="reticle" hidden aria-hidden="true">
+      <div class="ret-move" id="retMove">
+        <svg class="ret-svg" viewBox="-60 -60 120 120">
+          <g class="ret-under"><circle r="22"/><path d="M-50 0H-30M30 0H50M0 30V50M0-50V-30"/><circle r="2.2"/></g>
+          <g class="ret-over"><circle r="22"/><path d="M-50 0H-30M30 0H50M0 30V50M0-50V-30"/><circle r="2.2" class="dot"/></g>
+          <circle class="ret-power-bg" r="29"/>
+          <circle class="ret-power" id="retPower" r="29" pathLength="100" stroke-dasharray="0 100" transform="rotate(-90)"/>
+        </svg>
+        <div class="ret-read"><b id="retPitch">+30.0°</b><span id="retTarget">Flag</span></div>
+      </div>
+      <div class="ret-ladder"><span id="rlMax">60°</span><i class="rl-bar"><b id="rlMark"></b></i><span id="rlMin">-10°</span><span class="rl-cap">angle</span></div>
+    </div>
+
+    <button id="lockPrompt" class="lockprompt" type="button" hidden>Click to aim with the mouse</button>
+
+    <div id="pick" class="pick" hidden>
+      <div class="pick-card">
+        <div class="pick-head"><h2 id="pickTitle">Choose a weapon</h2><p id="pickInfo"></p></div>
+        <div class="bag" id="bag" role="radiogroup" aria-label="Golf bag: choose a weapon"></div>
+        <p class="pick-foot" id="pickFoot"></p>
+      </div>
+    </div>
+
+    <div id="banner" class="banner" aria-live="polite"></div>
+    <div id="callout" class="callout" aria-live="polite"><div class="co-big" id="coBig"></div><div class="co-small" id="coSmall"></div></div>
+
+    <div class="hud-bottom">
+      <div id="toast" class="toast" aria-live="polite"></div>
+      <div id="choose" class="choose" hidden>
+        <p class="choose-q">Three bullets landed. Pick the one that counts.</p>
+        <div class="choose-row" id="chooseRow"></div>
+      </div>
+      <div class="hint" id="hint">Drag to look around and aim</div>
+      <div class="controls">
+        <div class="pad">
+          <button id="leftBtn" class="aimbtn" type="button" aria-label="Turn left"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4 7 12l8 8"/></svg></button>
+          <button id="upBtn" class="aimbtn" type="button" aria-label="Aim higher"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 15 8-8 8 8"/></svg></button>
+          <button id="downBtn" class="aimbtn" type="button" aria-label="Aim lower"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 9 8 8 8-8"/></svg></button>
+          <button id="rightBtn" class="aimbtn" type="button" aria-label="Turn right"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 4 8 8-8 8"/></svg></button>
+        </div>
+        <button id="fireBtn" class="fire" type="button"><span class="fill" id="fireFill"></span><span class="f-lbl">Fire</span><span class="f-sub" id="fireSub">hold</span></button>
+      </div>
+    </div>
+  </div>
+
+  <div id="setup" class="screen">
+    <div class="panel">
+      <p class="kicker">3 holes · 1–4 players · one screen</p>
+      <h1 class="logo">Birdie Blasters</h1>
+      <p class="lede">The golf clubs have been swapped for guns. You stand where your shot lands, so the next player can shoot you back toward the tee.</p>
+      <div class="field">
+        <span class="label" id="countLabel">Players</span>
+        <div class="seg" id="countSeg" role="radiogroup" aria-labelledby="countLabel">
+          <button type="button" role="radio" data-n="1" aria-checked="false">1</button>
+          <button type="button" role="radio" data-n="2" aria-checked="true">2</button>
+          <button type="button" role="radio" data-n="3" aria-checked="false">3</button>
+          <button type="button" role="radio" data-n="4" aria-checked="false">4</button>
+        </div>
+      </div>
+      <div class="names" id="names"></div>
+      <ul class="rules">
+        <li>The golf bag holds eight weapons, one for each club. The <b>bazooka</b> is your driver and the <b>dart blaster</b> is your putter. Every weapon has its own special effect.</li>
+        <li>The wind changes from hole to hole, and sand and rough take power from your shot.</li>
+        <li>You aim through your character’s eyes: with the mouse on a computer, by dragging on a phone. Hold to build <b>power</b> and release to fire.</li>
+        <li>Hit an opponent and they fly 40 m back. A headshot sends them all the way back to the tee.</li>
+        <li>Fewest strokes after three holes wins.</li>
+      </ul>
+      <p class="err" id="glErr" hidden>Your browser could not start 3D graphics (WebGL). Try another browser, or turn on hardware acceleration.</p>
+      <button id="startBtn" class="btn-primary" type="button">To the first tee</button>
+    </div>
+  </div>
+
+  <div id="board" class="screen" hidden>
+    <div class="scorecard">
+      <div class="sc-head"><h2 id="scTitle">Scorecard</h2><p id="scSub"></p></div>
+      <div class="sc-wrap"><table class="sc" id="scTable"></table></div>
+      <p class="sc-legend"><span><span class="mk u1"></span>under par</span><span><span class="mk o1"></span>over par</span><span>Max par + 5 strokes per hole</span></p>
+      <div class="sc-actions" id="scActions"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+'use strict';
+
+/* ================= helpers ================= */
+const $ = s => document.querySelector(s);
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+function smooth(e0, e1, x) { const t = clamp((x - e0) / (e1 - e0), 0, 1); return t * t * (3 - 2 * t); }
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function angLerp(a, b, t) { let d = b - a; while (d > Math.PI) d -= Math.PI * 2; while (d < -Math.PI) d += Math.PI * 2; return a + d * t; }
+const REDUCED = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+const COARSE = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+const store = {
+  get(k) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } }
+};
+const fmt1 = v => v.toFixed(1);
+function genitive(n) { return /s$/i.test(n) ? n + '’' : n + '’s'; }
+
+/* ================= physics core ================= */
+// PHYSICS-START
+const G = 9.8;
+const BALL_R = 0.2;
+const STEP = 1 / 240;
+const SURF = {
+  tee:     { roll: 2.4, lin: 0.30, rest: 0.95, fric: 0.22 },
+  fairway: { roll: 2.4, lin: 0.30, rest: 0.95, fric: 0.22 },
+  green:   { roll: 1.4, lin: 0.32, rest: 0.80, fric: 0.15 },
+  rough:   { roll: 6.0, lin: 0.70, rest: 0.55, fric: 0.50 },
+  sand:    { roll: 16,  lin: 1.40, rest: 0.12, fric: 0.85 },
+  oob:     { roll: 5.0, lin: 0.60, rest: 0.50, fric: 0.45 },
+  water:   { roll: 8.0, lin: 1.00, rest: 0.10, fric: 0.80 },
+  crate:   { roll: 4.0, lin: 0.50, rest: 0.55, fric: 0.35 }
+};
+// The golf bag. Each weapon stands in for a club.
+// eye: camera height · pitch*: angle limits in degrees · precision: 1–10, lower = more random spread at high power
+// grav: gravity multiplier (lift) · thrust/burn: rocket motor · windMul: how much the wind moves it
+// burst: grenade energy kick after its first bounce · magnet: pull toward the cup · shots: projectiles per trigger pull
+// zoom: scope magnification · sandProof: no power loss from sand or rough · cupR/cupV: how forgiving the cup is
+const WIND_K = 0.08, MAGNET_R = 12;
+const WEAPONS = [
+  { id: 'bazooka', name: 'Bazooka', club: 'Driver', cal: '84 mm rocket', speed: 34, thrust: 15, burn: 0.9, rest: 0.12, keep: 0.35, rollMul: 1.6, drag: 0.004, windMul: 1.8,
+    eye: 2.6, pitchMin: -10, pitchMax: 55, pitchDef: 24, precision: 4, explode: true, zoom: 3,
+    tip: 'The rocket motor adds speed, and a tailwind adds even more. Explodes on landing.' },
+  { id: 'grenade', name: 'Grenade Launcher', club: '3-wood', cal: '40 mm', speed: 33, rest: 0.45, keep: 0.6, rollMul: 1.2, drag: 0.005, windMul: 1.1,
+    eye: 2.6, pitchMin: -5, pitchMax: 65, pitchDef: 40, precision: 6, burst: { delay: 0.35, up: 6, push: 6 }, zoom: 3,
+    tip: 'High arc over trees and crates. Bounces once, then an energy burst sends it onward.' },
+  { id: 'sniper', name: 'Sniper Rifle', club: 'Long iron', cal: '.338', speed: 57, rest: 0.40, keep: 0.5, rollMul: 1.0, drag: 0.006, windMul: 0.45,
+    eye: 2.6, pitchMin: -10, pitchMax: 12, pitchDef: 4, precision: 9, zoom: 5,
+    tip: 'Flat and precise. Zoom in and the scope shows where the bullet lands, ignoring wind.' },
+  { id: 'auto', name: 'Assault Rifle', club: 'Mid iron', cal: '5.56 mm', speed: 34, rest: 0.35, keep: 0.55, rollMul: 1.0, drag: 0.006, windMul: 0.8,
+    eye: 2.6, pitchMin: -10, pitchMax: 20, pitchDef: 10, precision: 8, shots: 3, zoom: 3,
+    tip: 'Fires three bullets on slightly different paths. You pick which one counts.' },
+  { id: 'shotgun', name: 'Shotgun', club: 'Short iron', cal: '12-gauge slug', speed: 26, rest: 0.30, keep: 0.5, rollMul: 1.2, drag: 0.01, windMul: 0.7,
+    eye: 2.6, pitchMin: -15, pitchMax: 40, pitchDef: 18, precision: 9, magnet: 2.5, zoom: 3,
+    tip: 'The slug is pulled toward the hole over the last 12 metres.' },
+  { id: 'pistol', name: 'Pistol', club: 'Wedge', cal: '9 mm', speed: 19, grav: 0.75, rest: 0.20, keep: 0.4, rollMul: 1.6, drag: 0.004, windMul: 0.8,
+    eye: 2.6, pitchMin: -20, pitchMax: 50, pitchDef: 28, precision: 9, zoom: 3,
+    tip: 'A little lift makes it float down softly and stop fast. A higher angle stops it quicker.' },
+  { id: 'flare', name: 'Flare Gun', club: 'Sand wedge', cal: 'distress flare', speed: 19, grav: 0.6, rest: 0.10, keep: 0.3, rollMul: 2.0, drag: 0.3, windMul: 1.6,
+    eye: 2.6, pitchMin: 20, pitchMax: 85, pitchDef: 65, precision: 8, sandProof: true, zoom: 3,
+    tip: 'Goes almost straight up and floats down. Loses no power in sand or rough, but the wind catches it easily.' },
+  // Foam dart: heavy air drag makes it drop steeply and barely bounce. The cup is more forgiving for darts.
+  { id: 'dart', name: 'Dart Blaster', club: 'Putter', cal: 'foam dart', speed: 25, rest: 0.15, keep: 0.45, rollMul: 1.8, drag: 0.5, windMul: 1.2,
+    eye: 2.6, pitchMin: -60, pitchMax: 55, pitchDef: 15, precision: 10, cupR: 0.95, cupV: 10, zoom: 3,
+    tip: 'The foam dart drops steeply and barely bounces. Lob it straight in, or let a flatter shot roll in.' }
+];
+function collideSurface(b, n, S, W) {
+  const vn = b.vx * n.x + b.vy * n.y + b.vz * n.z;
+  if (vn >= 0) return 0;
+  const tx = b.vx - vn * n.x, ty = b.vy - vn * n.y, tz = b.vz - vn * n.z;
+  if (-vn > 2.2) {
+    const keep = W.keep * (1 - S.fric), r = W.rest * S.rest;
+    b.vx = tx * keep - vn * n.x * r; b.vy = ty * keep - vn * n.y * r; b.vz = tz * keep - vn * n.z * r;
+    return -vn;
+  }
+  b.vx = tx; b.vy = ty; b.vz = tz;
+  return 0;
+}
+function applyRoll(b, n, S, W, dt) {
+  const sp = Math.hypot(b.vx, b.vy, b.vz);
+  if (sp <= 0) return;
+  const dec = (S.roll * W.rollMul * n.y + S.lin * sp) * dt;
+  const f = Math.max(0, sp - dec) / sp;
+  b.vx *= f; b.vy *= f; b.vz *= f;
+}
+function collideObstacles(b, W, M, dt) {
+  let imp = 0;
+  for (const k of M.boxes) {
+    if (b.x < k.x0 - BALL_R || b.x > k.x1 + BALL_R || b.z < k.z0 - BALL_R || b.z > k.z1 + BALL_R || b.y < k.y0 - BALL_R || b.y > k.y1 + BALL_R) continue;
+    const cx = clamp(b.x, k.x0, k.x1), cy = clamp(b.y, k.y0, k.y1), cz = clamp(b.z, k.z0, k.z1);
+    let dx = b.x - cx, dy = b.y - cy, dz = b.z - cz;
+    const d = Math.hypot(dx, dy, dz);
+    if (d >= BALL_R) continue;
+    if (d < 1e-6) {
+      const opts = [[b.x - k.x0, -1, 0, 0], [k.x1 - b.x, 1, 0, 0], [b.y - k.y0, 0, -1, 0], [k.y1 - b.y, 0, 1, 0], [b.z - k.z0, 0, 0, -1], [k.z1 - b.z, 0, 0, 1]];
+      opts.sort((a, c) => a[0] - c[0]);
+      const o = opts[0]; dx = o[1]; dy = o[2]; dz = o[3];
+      b.x += dx * (o[0] + BALL_R); b.y += dy * (o[0] + BALL_R); b.z += dz * (o[0] + BALL_R);
+    } else {
+      dx /= d; dy /= d; dz /= d;
+      b.x = cx + dx * BALL_R; b.y = cy + dy * BALL_R; b.z = cz + dz * BALL_R;
+    }
+    const n = { x: dx, y: dy, z: dz };
+    if (dy > 0.7) {
+      imp = Math.max(imp, collideSurface(b, n, SURF.crate, W));
+      applyRoll(b, n, SURF.crate, W, dt);
+      b.contact = true; b.surf = 'crate';
+    } else {
+      const vn = b.vx * dx + b.vy * dy + b.vz * dz;
+      if (vn < 0) {
+        b.vx -= 1.45 * vn * dx; b.vy -= 1.45 * vn * dy; b.vz -= 1.45 * vn * dz;
+        b.vx *= 0.85; b.vz *= 0.85;
+        if (-vn > 1.5) imp = Math.max(imp, -vn);
+      }
+    }
+  }
+  for (const t of M.trees) {
+    const dx = b.x - t.x, dz = b.z - t.z, dh = Math.hypot(dx, dz);
+    if (dh > t.canopyR + 1) continue;
+    if (b.y < t.y0 + t.trunkH + 0.4 && dh < t.trunkR + BALL_R && dh > 1e-6) {
+      const nx = dx / dh, nz = dz / dh;
+      b.x = t.x + nx * (t.trunkR + BALL_R); b.z = t.z + nz * (t.trunkR + BALL_R);
+      const vn = b.vx * nx + b.vz * nz;
+      if (vn < 0) { b.vx -= 1.4 * vn * nx; b.vz -= 1.4 * vn * nz; if (-vn > 1.5) imp = Math.max(imp, -vn); }
+    }
+    const base = t.y0 + t.trunkH;
+    if (b.y > base && b.y < base + t.canopyH) {
+      const r = t.canopyR * (1 - (b.y - base) / t.canopyH);
+      if (dh < r) { const k = 1 - 2.4 * dt; b.vx *= k; b.vy *= k; b.vz *= k; }
+    }
+  }
+  return imp;
+}
+function stepBall(b, dt, W, M, full) {
+  b.t = (b.t || 0) + dt;
+  const air = !b.contact;
+  b.vy -= G * (W.grav || 1) * dt;
+  if (W.drag) { const k = 1 - W.drag * dt; b.vx *= k; b.vy *= k; b.vz *= k; }
+  if (W.thrust && air && b.t < W.burn) { const s = Math.hypot(b.vx, b.vy, b.vz) || 1, a = W.thrust * dt / s; b.vx += b.vx * a; b.vy += b.vy * a; b.vz += b.vz * a; }
+  if (air && M.wind) { const k = WIND_K * (W.windMul || 1) * dt; b.vx += M.wind.x * k; b.vz += M.wind.z * k; }
+  if (W.magnet && M.cup) {
+    const dx = M.cup.x - b.x, dz = M.cup.z - b.z, d = Math.hypot(dx, dz);
+    if (d < MAGNET_R && d > 0.05) { const a = W.magnet * (1 - d / MAGNET_R) * dt / d; b.vx += dx * a; b.vz += dz * a; }
+  }
+  if (W.burst && b.impactT != null && !b.burstDone && b.t - b.impactT > W.burst.delay) {
+    b.burstDone = true; b.justBurst = true;
+    const hs = Math.hypot(b.vx, b.vz) + W.burst.push;
+    b.vx = b.dirx * hs; b.vz = b.dirz * hs; b.vy = Math.max(b.vy, 0) + W.burst.up;
+  }
+  b.x += b.vx * dt; b.y += b.vy * dt; b.z += b.vz * dt;
+  b.contact = false; b.surf = null;
+  let imp = 0;
+  const h = M.height(b.x, b.z);
+  if (b.y - BALL_R <= h) {
+    const n = M.normal(b.x, b.z);
+    b.y = h + BALL_R;
+    const surf = M.surface(b.x, b.z);
+    const S = SURF[surf] || SURF.fairway;
+    imp = collideSurface(b, n, S, W);
+    applyRoll(b, n, S, W, dt);
+    b.contact = true; b.surf = surf;
+  }
+  if (full) imp = Math.max(imp, collideObstacles(b, W, M, dt));
+  if (imp > 0 && b.impactT == null) b.impactT = b.t;
+  return imp;
+}
+// The shot leaves from the player's eye, straight along the crosshair (yaw in radians, pitch in degrees)
+function launchState(W, power, yaw, pitch, from) {
+  const sp = W.speed * Math.sqrt(clamp(power, 0, 1));
+  const pr = pitch * Math.PI / 180, cp = Math.cos(pr), spp = Math.sin(pr);
+  const dx = Math.sin(yaw) * cp, dz = Math.cos(yaw) * cp;
+  return {
+    x: from.x + dx * 1.2, y: from.y + W.eye + spp * 1.2, z: from.z + dz * 1.2,
+    vx: dx * sp, vy: spp * sp, vz: dz * sp, contact: false, surf: null,
+    t: 0, dirx: Math.sin(yaw), dirz: Math.cos(yaw), impactT: null, burstDone: false, justBurst: false
+  };
+}
+// PHYSICS-END
+
+/* ================= course data ================= */
+// center: fairway centerline, crates: [x, z, width, depth, height], bumps: [x, z, height, radius]
+const HOLES = [
+  { name: 'Warm-Up', par: 3, seed: 11, center: [[0, 12], [0, -198]], tee: [0, 0], cup: [3, -172], fairW: 17, roughW: 13, greenR: 15,
+    bumps: [[-7, -55, 2.6, 16], [9, -88, 2.2, 13], [-10, -128, 1.8, 12], [15, -150, -1.4, 10], [1, -25, 1.0, 9]],
+    bunkers: [[-12, -160, 5.5], [13, -183, 5], [8, -118, 4.5]], ponds: [],
+    crates: [[-3, -104, 5, 2.4, 2.2], [10, -138, 2.6, 2.6, 1.6], [12.4, -138, 2.2, 2.2, 3.0]], ring: null, trees: 34 },
+  { name: 'Duck Pond', par: 4, seed: 23, center: [[0, 12], [8, -105], [-22, -252]], tee: [0, 0], cup: [-18, -232], fairW: 19, roughW: 13, greenR: 15,
+    bumps: [[-10, -40, 2, 14], [18, -70, 2.4, 12], [-26, -180, 2.8, 16], [2, -200, 1.6, 10]],
+    bunkers: [[-31, -221, 5.5], [-6, -243, 5], [-1, -168, 6]], ponds: [[7, -112, 19]],
+    crates: [[-14, -150, 6, 2.2, 2]], ring: null, trees: 40 },
+  { name: 'The Fortress', par: 4, seed: 37, center: [[0, 12], [-16, -95], [8, -232]], tee: [0, 0], cup: [6, -212], fairW: 18, roughW: 13, greenR: 13,
+    bumps: [[6, -212, 4.5, 24], [-12, -50, 2.2, 14], [10, -80, 1.8, 12], [-22, -150, 2.4, 14]],
+    bunkers: [[-5, -165, 5.5], [22, -186, 5]], ponds: [[-25, -118, 10]],
+    crates: [[-6, -60, 4, 2.2, 2]], ring: { r: 18, gaps: [[76, 124], [300, 328]] }, trees: 36 }
+];
+const CUP_R = 0.62;
+const PLATEAU = 45 * 0.12 + 45 * 45 * 0.005;
+const KNOCK = 40;
+const BLAST_R = 8;
+const CHAR_S = 1.35;
+
+function makeModel(def) {
+  const segs = []; let total = 0;
+  for (let i = 0; i < def.center.length - 1; i++) {
+    const [ax, az] = def.center[i], [bx, bz] = def.center[i + 1];
+    const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
+    segs.push({ ax, az, dx: dx / len, dz: dz / len, len, s0: total });
+    total += len;
+  }
+  const E = def.fairW + def.roughW;
+  function project(x, z) {
+    let best = null, bd = Infinity;
+    for (const g of segs) {
+      const t = clamp((x - g.ax) * g.dx + (z - g.az) * g.dz, 0, g.len);
+      const cx = g.ax + g.dx * t, cz = g.az + g.dz * t, d = Math.hypot(x - cx, z - cz);
+      if (d < bd) { bd = d; best = { g, t, cx, cz }; }
+    }
+    const g = best.g;
+    return { s: g.s0 + best.t, lat: (x - best.cx) * -g.dz + (z - best.cz) * g.dx, d: bd };
+  }
+  function pointAt(s, lat) {
+    s = clamp(s, 0, total);
+    let g = segs[segs.length - 1];
+    for (const sg of segs) { if (s <= sg.s0 + sg.len) { g = sg; break; } }
+    const t = s - g.s0;
+    return { x: g.ax + g.dx * t - g.dz * lat, z: g.az + g.dz * t + g.dx * lat };
+  }
+  // Rolling course, then hills beyond the out-of-bounds line that level off into a flat plateau (PLATEAU)
+  function baseH(x, z) {
+    const d = project(x, z).d;
+    let h = 0.7 * Math.sin(x * 0.045 + 1.3) * Math.cos(z * 0.037) + 0.35 * Math.sin(z * 0.09 + x * 0.02);
+    if (d > E + 15) h *= 1 - smooth(E + 15, E + 40, d);
+    for (const b of def.bumps) { const dx = x - b[0], dz = z - b[1]; h += b[2] * Math.exp(-(dx * dx + dz * dz) / (b[3] * b[3])); }
+    if (d > E) { const e = Math.min(d - E, 45); h += e * 0.12 + e * e * 0.005; }
+    return h;
+  }
+  const cup = { x: def.cup[0], z: def.cup[1] }, tee = { x: def.tee[0], z: def.tee[1] };
+  const cupBase = baseH(cup.x, cup.z), teeBase = baseH(tee.x, tee.z);
+  const ponds = def.ponds.map(p => {
+    let m = Infinity;
+    for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2; m = Math.min(m, baseH(p[0] + Math.cos(a) * (p[2] + 6), p[1] + Math.sin(a) * (p[2] + 6))); }
+    return { x: p[0], z: p[1], r: p[2], level: m - 0.35 };
+  });
+  function height(x, z) {
+    let h = baseH(x, z);
+    const dc = Math.hypot(x - cup.x, z - cup.z);
+    if (dc < def.greenR + 8) { const t = smooth(def.greenR + 8, def.greenR * 0.5, dc); h = lerp(h, cupBase + (h - cupBase) * 0.2, t); }
+    const dt = Math.hypot(x - tee.x, z - tee.z);
+    if (dt < 9) h = lerp(h, teeBase, smooth(9, 3, dt));
+    for (const p of ponds) { const d = Math.hypot(x - p.x, z - p.z); if (d < p.r + 6) h = lerp(h, p.level - 1.8, smooth(p.r + 6, p.r * 0.65, d)); }
+    for (const b of def.bunkers) { const d = Math.hypot(x - b[0], z - b[1]); if (d < b[2] + 1.5) h -= 0.55 * smooth(b[2] + 1.5, b[2] * 0.4, d); }
+    return h;
+  }
+  function normal(x, z) {
+    const e = 0.6;
+    const nx = -(height(x + e, z) - height(x - e, z)) / (2 * e), nz = -(height(x, z + e) - height(x, z - e)) / (2 * e);
+    const l = Math.hypot(nx, 1, nz);
+    return { x: nx / l, y: 1 / l, z: nz / l };
+  }
+  function surface(x, z) {
+    for (const p of ponds) if (Math.hypot(x - p.x, z - p.z) < p.r) return 'water';
+    if (Math.hypot(x - cup.x, z - cup.z) < def.greenR) return 'green';
+    for (const b of def.bunkers) if (Math.hypot(x - b[0], z - b[1]) < b[2]) return 'sand';
+    if (Math.hypot(x - tee.x, z - tee.z) < 4.5) return 'tee';
+    const d = project(x, z).d;
+    if (d <= def.fairW) return 'fairway';
+    if (d <= E) return 'rough';
+    return 'oob';
+  }
+  const boxes = [];
+  function addBox(cx, cz, w, d, hgt, label) {
+    let y0 = Infinity;
+    for (const [ox, oz] of [[-w / 2, -d / 2], [w / 2, -d / 2], [-w / 2, d / 2], [w / 2, d / 2], [0, 0]]) y0 = Math.min(y0, height(cx + ox, cz + oz));
+    y0 -= 0.3;
+    boxes.push({ x0: cx - w / 2, x1: cx + w / 2, z0: cz - d / 2, z1: cz + d / 2, y0, y1: y0 + hgt + 0.3, cx, cz, w, d, h: hgt + 0.3, label });
+  }
+  def.crates.forEach((c, i) => addBox(c[0], c[1], c[2], c[3], c[4], i % 2 ? '84 MM' : 'AMMO'));
+  if (def.ring) {
+    const R = def.ring.r, n = Math.round(2 * Math.PI * R / 2.6);
+    for (let i = 0; i < n; i++) {
+      const a = i / n * 360;
+      if (def.ring.gaps.some(g => a >= g[0] && a <= g[1])) continue;
+      const rad = a * Math.PI / 180;
+      addBox(cup.x + Math.cos(rad) * R, cup.z + Math.sin(rad) * R, 2.3, 2.3, i % 3 === 0 ? 3.6 : 1.9, i % 2 ? '84 MM' : 'AMMO');
+    }
+  }
+  const R = rng(def.seed), trees = [];
+  let tries = 0;
+  while (trees.length < def.trees && tries < 900) {
+    tries++;
+    const s = R() * total, side = R() < 0.5 ? -1 : 1;
+    const p = pointAt(s, side * (def.fairW + 3 + R() * (def.roughW + 32)));
+    if (Math.hypot(p.x - cup.x, p.z - cup.z) < def.greenR + 8) continue;
+    if (Math.hypot(p.x - tee.x, p.z - tee.z) < 14) continue;
+    if (ponds.some(q => Math.hypot(p.x - q.x, p.z - q.z) < q.r + 8)) continue;
+    if (trees.some(t => Math.hypot(p.x - t.x, p.z - t.z) < 5)) continue;
+    if (def.ring && Math.hypot(p.x - cup.x, p.z - cup.z) < def.ring.r + 6) continue;
+    if (project(p.x, p.z).d < def.fairW + 2) continue;
+    const sc = 0.8 + R() * 0.7;
+    trees.push({ x: p.x, z: p.z, y0: height(p.x, p.z), trunkR: 0.4 * sc, trunkH: 2.2 * sc, canopyR: 2.4 * sc, canopyH: 5.5 * sc, sc, kind: R() < 0.7 ? 'pine' : 'round' });
+  }
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const [x, z] of def.center) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z); }
+  const pad = E + 70;
+  const M = {
+    def, segs, total, E, project, pointAt, height, normal, surface, ponds, boxes, trees,
+    cup: { x: cup.x, z: cup.z, y: height(cup.x, cup.z) }, tee: { x: tee.x, z: tee.z, y: height(tee.x, tee.z) },
+    ext: { x0: x0 - pad, x1: x1 + pad, z0: z0 - pad, z1: z1 + pad }
+  };
+  M.sTee = project(tee.x, tee.z).s;
+  return M;
+}
+function validPos(M, x, z) {
+  const pr = M.project(x, z);
+  let s = clamp(pr.s, M.sTee, M.total), lat = clamp(pr.lat, -(M.E - 3), M.E - 3);
+  let p = (pr.d > M.E - 3 || pr.s < M.sTee) ? M.pointAt(s, lat) : { x, z };
+  for (let i = 0; i < 80; i++) {
+    const bad = M.ponds.some(q => Math.hypot(p.x - q.x, p.z - q.z) < q.r + 4) ||
+      M.boxes.some(b => p.x > b.x0 - 1.3 && p.x < b.x1 + 1.3 && p.z > b.z0 - 1.3 && p.z < b.z1 + 1.3) ||
+      M.trees.some(t => Math.hypot(p.x - t.x, p.z - t.z) < t.trunkR + 1.1);
+    if (!bad) break;
+    s = Math.max(M.sTee, s - 3); lat *= 0.85; p = M.pointAt(s, lat);
+  }
+  return { x: p.x, z: p.z, y: M.height(p.x, p.z) };
+}
+
+// Flat-ground reference: the longest full-power shot each weapon can make within its pitch limits
+function flatShot(W, pitch) {
+  const UP = { x: 0, y: 1, z: 0 };
+  const FLAT = { height: () => 0, normal: () => UP, surface: () => 'fairway', boxes: [], trees: [] };
+  const b = launchState(W, 1, 0, pitch, { x: 0, y: 0, z: 0 });
+  let t = 0, still = 0;
+  while (t < 30) {
+    t += STEP; stepBall(b, STEP, W, FLAT, false);
+    if (b.contact && Math.hypot(b.vx, b.vy, b.vz) < 0.3) { still += STEP; if (still > 0.25) break; } else still = 0;
+  }
+  return b.z;
+}
+for (const W of WEAPONS) {
+  let best = 0;
+  for (let p = Math.max(W.pitchMin, -5); p <= W.pitchMax; p += 2.5) best = Math.max(best, flatShot(W, p));
+  W.range = Math.round(best / 5) * 5;
+}
+
+/* ================= sound ================= */
+const sfx = (() => {
+  let ac = null, master = null, noiseBuf = null, muted = !!store.get('birdieblasters-muted');
+  function ctx() {
+    if (muted) return null;
+    if (!ac) {
+      try {
+        ac = new (window.AudioContext || window.webkitAudioContext)();
+        master = ac.createGain(); master.gain.value = 0.5; master.connect(ac.destination);
+        noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+        const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      } catch (e) { ac = null; return null; }
+    }
+    if (ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function noise(dur, type, freq, gain, q, freqEnd, delay) {
+    const a = ctx(); if (!a) return;
+    const t = a.currentTime + (delay || 0), s = a.createBufferSource(); s.buffer = noiseBuf;
+    const f = a.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(freq, t);
+    if (freqEnd) f.frequency.exponentialRampToValueAtTime(freqEnd, t + dur);
+    f.Q.value = q || 1;
+    const g = a.createGain(); g.gain.setValueAtTime(gain, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    s.connect(f); f.connect(g); g.connect(master); s.start(t); s.stop(t + dur + 0.05);
+  }
+  function tone(f0, f1, dur, type, gain, delay) {
+    const a = ctx(); if (!a) return;
+    const t = a.currentTime + (delay || 0), o = a.createOscillator(); o.type = type;
+    o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+    const g = a.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(gain, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master); o.start(t); o.stop(t + dur + 0.05);
+  }
+  return {
+    unlock() { ctx(); },
+    get muted() { return muted; },
+    setMuted(m) { muted = m; store.set('birdieblasters-muted', m); if (ac) { try { m ? ac.suspend() : ac.resume(); } catch (e) { /* ignore */ } } if (!m) ctx(); },
+    shot(id) {
+      if (id === 'bazooka') { noise(0.7, 'lowpass', 1000, 0.9, 1, 160); tone(150, 45, 0.45, 'sine', 0.6); }
+      else if (id === 'grenade') { tone(190, 70, 0.28, 'sine', 0.55); noise(0.3, 'lowpass', 700, 0.6); }
+      else if (id === 'sniper') { noise(0.45, 'highpass', 900, 0.95); tone(1200, 180, 0.22, 'square', 0.1); }
+      else if (id === 'auto') { for (let k = 0; k < 3; k++) noise(0.12, 'bandpass', 1600, 0.75, 0.8, null, k * 0.09); }
+      else if (id === 'shotgun') { noise(0.55, 'lowpass', 1500, 1.0, 0.7, 260); tone(110, 50, 0.3, 'sine', 0.5); }
+      else if (id === 'pistol') { noise(0.16, 'bandpass', 1800, 0.75, 0.8); }
+      else if (id === 'flare') { noise(0.7, 'bandpass', 700, 0.5, 0.8, 2600); tone(300, 900, 0.4, 'sine', 0.14); }
+      else { noise(0.12, 'bandpass', 1300, 0.45, 1.5, 500); tone(220, 120, 0.08, 'sine', 0.25); } // dart blaster "pfft"
+    },
+    burst() { tone(260, 900, 0.35, 'sine', 0.35); noise(0.25, 'bandpass', 2000, 0.3); },
+    boom() { noise(1.4, 'lowpass', 800, 1.0, 0.7, 80); tone(95, 28, 0.9, 'sine', 0.8); },
+    bounce(v) { tone(240 + v * 8, 110, 0.07, 'sine', Math.min(0.25, 0.03 + v * 0.012)); },
+    bonk() { tone(380, 900, 0.14, 'square', 0.16); tone(900, 480, 0.14, 'triangle', 0.22, 0.08); },
+    ding() { tone(1400, 1400, 0.55, 'sine', 0.25); tone(2100, 2100, 0.45, 'sine', 0.12, 0.02); noise(0.1, 'highpass', 2500, 0.4); },
+    splash() { noise(0.8, 'bandpass', 900, 0.75, 0.6, 260); },
+    cup() { tone(1046, 1046, 0.16, 'sine', 0.3); tone(1318, 1318, 0.16, 'sine', 0.3, 0.12); tone(1568, 1568, 0.32, 'sine', 0.3, 0.24); },
+    poof() { noise(0.2, 'bandpass', 2200, 0.16, 1.2); },
+    miss() { tone(300, 150, 0.35, 'sawtooth', 0.08); }
+  };
+})();
+
+/* ================= state ================= */
+const STYLES = [
+  { color: '#ff5fa2', hat: 'cone',      hatName: 'Traffic cone', name: 'Kevin Kaboom' },
+  { color: '#3db8ff', hat: 'viking',    hatName: 'Viking helmet', name: 'Barry Bazooka' },
+  { color: '#ffcf3d', hat: 'propeller', hatName: 'Propeller cap', name: 'Bouncy Betty' },
+  { color: '#b07cff', hat: 'party',     hatName: 'Party hat',    name: 'Doctor Dunk' }
+];
+const state = {
+  phase: 'setup', holeIdx: 0, players: [], order: [], turnPos: 0, cur: -1,
+  weapon: 0, yaw: 0, pitch: 30, zoom: false, zoomF: 1, charging: false, chargeT: 0, power: 0,
+  shot: null, timeScale: 1, slowT: 0, shotsFired: 0, waitFn: null, count: 2
+};
+const timers = [];
+function later(sec, fn) { timers.push({ t: sec, fn }); }
+let T = 0;
+
+/* ================= three.js setup ================= */
+let renderer = null, scene, camera;
+const canvas = $('#c');
+try {
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
+} catch (e) { renderer = null; }
+if (!renderer || typeof THREE === 'undefined') {
+  $('#glErr').hidden = false; $('#startBtn').disabled = true;
+  return;
+}
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setClearColor(0x000000, 0);
+renderer.autoClear = false;
+scene = new THREE.Scene();
+scene.fog = new THREE.Fog(0xcfeaf2, 170, 760);
+camera = new THREE.PerspectiveCamera(55, 1, 0.3, 2500);
+scene.add(new THREE.HemisphereLight(0xe2f4ff, 0x56763a, 0.58));
+const sun = new THREE.DirectionalLight(0xfff1d2, 0.62); sun.position.set(60, 120, 40); scene.add(sun);
+
+// First-person weapon ("viewmodel"): its own little scene and camera, drawn on top of the world
+const vmScene = new THREE.Scene(), vmCamera = new THREE.PerspectiveCamera(55, 1, 0.05, 20), vmRoot = new THREE.Group();
+vmScene.add(new THREE.HemisphereLight(0xe2f4ff, 0x56763a, 0.7));
+const vmSun = new THREE.DirectionalLight(0xfff1d2, 0.6); vmSun.position.set(1, 2, 1.5); vmScene.add(vmSun);
+vmScene.add(vmRoot);
+let baseFov = 55;
+function resize() {
+  const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+  renderer.setSize(w, h, false);
+  baseFov = w / h < 0.8 ? 64 : 55;
+  camera.aspect = w / h; camera.fov = baseFov / state.zoomF; camera.updateProjectionMatrix();
+  vmCamera.aspect = w / h; vmCamera.fov = baseFov; vmCamera.updateProjectionMatrix();
+  sizeMap();
+}
+window.addEventListener('resize', resize);
+
+function phong(color, extra) { return new THREE.MeshPhongMaterial(Object.assign({ color, flatShading: true, shininess: 10 }, extra || {})); }
+function disposeTree(o) {
+  o.traverse(n => {
+    if (n.geometry) n.geometry.dispose();
+    if (n.material) { const ms = Array.isArray(n.material) ? n.material : [n.material]; ms.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); }); }
+  });
+}
+function dotTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64; const g = cv.getContext('2d');
+  g.beginPath(); g.arc(32, 32, 26, 0, Math.PI * 2); g.fillStyle = '#1b2214'; g.fill();
+  g.beginPath(); g.arc(32, 32, 18, 0, Math.PI * 2); g.fillStyle = '#ffffff'; g.fill();
+  return new THREE.CanvasTexture(cv);
+}
+function crateTexture(label) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+  g.fillStyle = '#58652f'; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = '#4b5627'; for (let i = 1; i < 4; i++) g.fillRect(0, i * 32 - 1, 128, 3);
+  g.strokeStyle = '#3a4320'; g.lineWidth = 10; g.strokeRect(5, 5, 118, 118);
+  g.fillStyle = '#e9e3c0'; g.font = '700 28px "Chakra Petch", monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(label, 64, 66);
+  return new THREE.CanvasTexture(cv);
+}
+function flagMarkerTexture() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+  g.beginPath(); g.moveTo(64, 120); g.lineTo(40, 86); g.arc(64, 60, 34, Math.PI * 0.75, Math.PI * 0.25); g.closePath();
+  g.fillStyle = '#1b2214'; g.fill();
+  g.beginPath(); g.arc(64, 60, 28, 0, Math.PI * 2); g.fillStyle = '#f7f6ee'; g.fill();
+  g.fillStyle = '#1b2214'; g.fillRect(55, 40, 4, 40);
+  g.beginPath(); g.moveTo(59, 40); g.lineTo(84, 49); g.lineTo(59, 58); g.closePath(); g.fillStyle = '#e8322b'; g.fill();
+  return new THREE.CanvasTexture(cv);
+}
+
+/* ================= world rendering ================= */
+const world = { group: null, M: null, flag: null, waters: [], clouds: [], mapStatic: null };
+const TC = {
+  fairA: new THREE.Color('#6cbf4b'), fairB: new THREE.Color('#60b043'),
+  greenA: new THREE.Color('#93da6b'), greenB: new THREE.Color('#86cf5f'),
+  rough: new THREE.Color('#4a9238'), oob: new THREE.Color('#7b9a45'), hill: new THREE.Color('#9daa5c'),
+  sand: new THREE.Color('#edd9a0'), tee: new THREE.Color('#7fcb5c'), bed: new THREE.Color('#4f7f62')
+};
+function terrainColor(M, x, y, z, out, r) {
+  let wet = false;
+  for (const p of M.ponds) if (Math.hypot(x - p.x, z - p.z) < p.r + 6 && y < p.level + 0.05) wet = true;
+  const surf = M.surface(x, z);
+  if (wet) out.copy(TC.bed);
+  else if (surf === 'fairway') out.copy(Math.floor(M.project(x, z).s / 9) % 2 ? TC.fairA : TC.fairB);
+  else if (surf === 'green') out.copy(Math.floor((x - z) / 3.2) % 2 ? TC.greenA : TC.greenB);
+  else if (surf === 'sand') out.copy(TC.sand);
+  else if (surf === 'tee') out.copy(TC.tee);
+  else if (surf === 'rough') out.copy(TC.rough);
+  else { const e = M.project(x, z).d - M.E; out.copy(TC.oob).lerp(TC.hill, clamp(e / 45, 0, 1)); }
+  out.multiplyScalar(0.94 + r * 0.1);
+}
+function buildWorld(idx) {
+  if (world.group) { scene.remove(world.group); disposeTree(world.group); }
+  const def = HOLES[idx], M = makeModel(def), g = new THREE.Group();
+  world.M = M; world.group = g; world.waters = []; world.clouds = [];
+  // terrain
+  const ext = M.ext, W = ext.x1 - ext.x0, D = ext.z1 - ext.z0, cell = 2.5;
+  let geo = new THREE.PlaneGeometry(W, D, Math.ceil(W / cell), Math.ceil(D / cell));
+  geo.rotateX(-Math.PI / 2); geo.translate((ext.x0 + ext.x1) / 2, 0, (ext.z0 + ext.z1) / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) pos.setY(i, M.height(pos.getX(i), pos.getZ(i)));
+  geo = geo.toNonIndexed(); geo.computeVertexNormals();
+  const p2 = geo.attributes.position, cols = new Float32Array(p2.count * 3), col = new THREE.Color(), R = rng(def.seed * 7 + 3);
+  for (let i = 0; i < p2.count; i += 3) {
+    const cx = (p2.getX(i) + p2.getX(i + 1) + p2.getX(i + 2)) / 3, cy = (p2.getY(i) + p2.getY(i + 1) + p2.getY(i + 2)) / 3, cz = (p2.getZ(i) + p2.getZ(i + 1) + p2.getZ(i + 2)) / 3;
+    terrainColor(M, cx, cy, cz, col, R());
+    for (let k = 0; k < 3; k++) { cols[(i + k) * 3] = col.r; cols[(i + k) * 3 + 1] = col.g; cols[(i + k) * 3 + 2] = col.b; }
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  g.add(new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true })));
+  // far ground + mountains
+  const mid = { x: (M.tee.x + M.cup.x) / 2, z: (M.tee.z + M.cup.z) / 2 };
+  // Far ground: a huge square with a hole where the terrain mesh is, at the plateau height
+  const FS = 2400, shape = new THREE.Shape();
+  shape.moveTo(mid.x - FS, -(mid.z + FS)); shape.lineTo(mid.x + FS, -(mid.z + FS)); shape.lineTo(mid.x + FS, -(mid.z - FS)); shape.lineTo(mid.x - FS, -(mid.z - FS)); shape.closePath();
+  const hole = new THREE.Path(), hx0 = ext.x0 + 3, hx1 = ext.x1 - 3, hy0 = -(ext.z1 - 3), hy1 = -(ext.z0 + 3);
+  hole.moveTo(hx0, hy0); hole.lineTo(hx0, hy1); hole.lineTo(hx1, hy1); hole.lineTo(hx1, hy0); hole.closePath();
+  shape.holes.push(hole);
+  const farGeo = new THREE.ShapeGeometry(shape); farGeo.rotateX(-Math.PI / 2);
+  const far = new THREE.Mesh(farGeo, new THREE.MeshLambertMaterial({ color: TC.hill })); far.position.y = PLATEAU - 0.12; g.add(far);
+  const mr = rng(def.seed + 99), mtnMat = phong(0x87ab9c);
+  for (let i = 0; i < 24; i++) {
+    const a = i / 24 * Math.PI * 2 + mr() * 0.2, rad = 470 + mr() * 160, h = 50 + mr() * 90;
+    const m = new THREE.Mesh(new THREE.ConeGeometry(55 + mr() * 50, h, 5 + Math.floor(mr() * 3)), mtnMat);
+    m.position.set(mid.x + Math.cos(a) * rad, 14 + h / 2, mid.z + Math.sin(a) * rad); m.rotation.y = mr() * 3; g.add(m);
+  }
+  // clouds
+  const cloudMat = phong(0xffffff, { shininess: 0 });
+  for (let i = 0; i < 8; i++) {
+    const c = new THREE.Group();
+    for (let k = 0; k < 4; k++) { const s = new THREE.Mesh(new THREE.IcosahedronGeometry(6 + mr() * 6, 0), cloudMat); s.position.set(k * 7 - 10, mr() * 3, mr() * 6); s.scale.y = 0.6; c.add(s); }
+    c.position.set(mid.x + (mr() - 0.5) * 600, 75 + mr() * 40, mid.z + (mr() - 0.5) * 600); c.userData.speed = 1.5 + mr() * 2; c.userData.x0 = mid.x;
+    g.add(c); world.clouds.push(c);
+  }
+  // water
+  for (const p of M.ponds) {
+    const w = new THREE.Mesh(new THREE.CircleGeometry(p.r + 6, 30), new THREE.MeshPhongMaterial({ color: 0x3aa0d8, transparent: true, opacity: 0.86, shininess: 90, specular: 0x9fdcff, flatShading: true }));
+    w.rotation.x = -Math.PI / 2; w.position.set(p.x, p.level, p.z); g.add(w); world.waters.push({ mesh: w, base: p.level });
+  }
+  // trees
+  const trunkMat = phong(0x7a5232), pineMat = phong(0x2f7d3c), roundMat = phong(0x4f9a3a);
+  const trunkGeo = new THREE.CylinderGeometry(0.75, 1, 1, 6), pineGeo = new THREE.ConeGeometry(1, 1, 7), roundGeo = new THREE.IcosahedronGeometry(1, 0);
+  for (const t of M.trees) {
+    const tr = new THREE.Mesh(trunkGeo, trunkMat); tr.scale.set(t.trunkR, t.trunkH + 0.6, t.trunkR); tr.position.set(t.x, t.y0 + (t.trunkH + 0.6) / 2 - 0.3, t.z); g.add(tr);
+    if (t.kind === 'pine') { const c = new THREE.Mesh(pineGeo, pineMat); c.scale.set(t.canopyR, t.canopyH, t.canopyR); c.position.set(t.x, t.y0 + t.trunkH + t.canopyH / 2, t.z); c.rotation.y = t.x; g.add(c); }
+    else { const c = new THREE.Mesh(roundGeo, roundMat); c.scale.set(t.canopyR * 0.95, t.canopyH * 0.5, t.canopyR * 0.95); c.position.set(t.x, t.y0 + t.trunkH + t.canopyH * 0.4, t.z); c.rotation.y = t.z; g.add(c); }
+  }
+  // crates
+  const crateMats = { 'AMMO': new THREE.MeshLambertMaterial({ map: crateTexture('AMMO') }), '84 MM': new THREE.MeshLambertMaterial({ map: crateTexture('84 MM') }) };
+  for (const b of M.boxes) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), crateMats[b.label]);
+    m.position.set(b.cx, b.y0 + b.h / 2, b.cz); g.add(m);
+  }
+  // out-of-bounds stakes
+  const stakeGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.5, 5), stakeMat = phong(0xffffff);
+  for (let s = 6; s < M.total - 4; s += 14) {
+    for (const side of [-1, 1]) {
+      const p = M.pointAt(s, side * (M.E + 0.5));
+      if (M.project(p.x, p.z).d < M.E - 1) continue;
+      if (M.ponds.some(q => Math.hypot(p.x - q.x, p.z - q.z) < q.r + 7)) continue;
+      const m = new THREE.Mesh(stakeGeo, stakeMat); m.position.set(p.x, M.height(p.x, p.z) + 0.7, p.z); g.add(m);
+    }
+  }
+  // tee markers
+  const teeMat = phong(0xff6b17);
+  for (const side of [-1, 1]) { const m = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), teeMat); m.position.set(M.tee.x + side * 3.2, M.tee.y + 0.25, M.tee.z - 1); g.add(m); }
+  // cup + flag
+  const cupM = new THREE.Mesh(new THREE.CircleGeometry(CUP_R, 20), new THREE.MeshBasicMaterial({ color: 0x0d1208 }));
+  cupM.rotation.x = -Math.PI / 2; cupM.position.set(M.cup.x, M.cup.y + 0.05, M.cup.z); g.add(cupM);
+  const rim = new THREE.Mesh(new THREE.RingGeometry(CUP_R, CUP_R + 0.1, 20), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  rim.rotation.x = -Math.PI / 2; rim.position.set(M.cup.x, M.cup.y + 0.055, M.cup.z); g.add(rim);
+  const flag = new THREE.Group(); flag.position.set(M.cup.x + 0.15, M.cup.y, M.cup.z);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 6.5, 6), phong(0xf7f6ee)); pole.position.y = 3.25; flag.add(pole);
+  const fg = new THREE.BufferGeometry();
+  fg.setAttribute('position', new THREE.BufferAttribute(new Float32Array([0, 6.4, 0, 0, 4.9, 0, 2.6, 5.65, 0]), 3)); fg.computeVertexNormals();
+  const cloth = new THREE.Mesh(fg, phong(0xe8322b, { side: THREE.DoubleSide })); flag.add(cloth);
+  const marker = new THREE.Sprite(new THREE.SpriteMaterial({ map: flagMarkerTexture(), depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true, fog: false }));
+  marker.scale.set(0.05, 0.05, 1); marker.center.set(0.5, 0); marker.position.y = 7.2; marker.renderOrder = 9; flag.add(marker);
+  g.add(flag); world.flag = { group: flag, cloth, marker };
+  scene.add(g);
+  buildMapStatic();
+}
+
+/* ================= characters ================= */
+function makeLabel(text, color) {
+  const cv = document.createElement('canvas'); cv.width = 512; cv.height = 128; const g = cv.getContext('2d');
+  let fs = 64; g.font = fs + 'px "Lilita One","Arial Rounded MT Bold",sans-serif';
+  while (g.measureText(text).width > 470 && fs > 28) { fs -= 4; g.font = fs + 'px "Lilita One","Arial Rounded MT Bold",sans-serif'; }
+  g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round'; g.lineWidth = 14; g.strokeStyle = '#1b2214';
+  g.strokeText(text, 256, 68); g.fillStyle = color; g.fillText(text, 256, 68);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true, fog: false }));
+  sp.scale.set(0.15, 0.0375, 1); sp.center.set(0.5, 0); sp.renderOrder = 10;
+  return sp;
+}
+function makeWeaponModels() {
+  const m = {}, dark = phong(0x2a2f24), metal = phong(0x50574a);
+  const bz = new THREE.Group();
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 1.9, 10), phong(0x5b7a2e)); tube.rotation.x = Math.PI / 2; bz.add(tube);
+  for (const z of [-0.95, 0.95]) { const r = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.21, 0.18, 10), phong(0x2d3a18)); r.rotation.x = Math.PI / 2; r.position.z = z; bz.add(r); }
+  const bg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.32, 0.12), dark); bg.position.set(0, -0.24, 0.15); bz.add(bg);
+  const bs = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.14, 0.22), dark); bs.position.set(-0.15, 0.18, 0.35); bz.add(bs);
+  bz.position.set(0.42, 0.45, -0.45); m.bazooka = bz;
+  const wood = phong(0x8a5a32), tan = phong(0xb79b6b);
+  const box = (g, w, h, d, mat, x, y, z, rx) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat); o.position.set(x, y, z); if (rx) o.rotation.x = rx; g.add(o); return o; };
+  const pipe = (g, r, len, mat, x, y, z) => { const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, len, 10), mat); o.rotation.x = Math.PI / 2; o.position.set(x, y, z); g.add(o); return o; };
+  // Grenade launcher: stubby fat barrel and a revolving drum
+  const gl = new THREE.Group(), olive = phong(0x556b2f);
+  box(gl, 0.18, 0.2, 0.5, olive, 0, 0, 0.05); pipe(gl, 0.11, 0.48, dark, 0, 0.02, 0.5);
+  const drum = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.16, 10), metal); drum.rotation.z = Math.PI / 2; drum.rotation.y = Math.PI / 2; drum.position.set(0, -0.06, 0.08); gl.add(drum);
+  box(gl, 0.1, 0.26, 0.12, dark, 0, -0.2, -0.08, -0.3); box(gl, 0.1, 0.16, 0.36, olive, 0, -0.02, -0.36);
+  gl.position.set(0.18, 0.1, 0); m.grenade = gl;
+  // Sniper rifle: long barrel, big scope
+  const sn = new THREE.Group();
+  box(sn, 0.12, 0.22, 0.62, wood, 0, -0.02, -0.28); box(sn, 0.13, 0.15, 0.55, dark, 0, 0, 0.25);
+  pipe(sn, 0.042, 1.5, metal, 0, 0.02, 1.2); pipe(sn, 0.085, 0.6, dark, 0, 0.17, 0.25);
+  pipe(sn, 0.1, 0.06, metal, 0, 0.17, 0.56); pipe(sn, 0.095, 0.06, metal, 0, 0.17, -0.04);
+  sn.position.set(0.18, 0.1, 0); m.sniper = sn;
+  // Assault rifle: dark body, tan furniture, curved magazine
+  const ar = new THREE.Group();
+  box(ar, 0.12, 0.18, 0.62, dark, 0, 0, 0.15); pipe(ar, 0.035, 0.55, metal, 0, 0.02, 0.72);
+  box(ar, 0.13, 0.12, 0.32, tan, 0, -0.02, 0.5); box(ar, 0.11, 0.2, 0.42, tan, 0, -0.04, -0.33);
+  box(ar, 0.09, 0.32, 0.13, metal, 0, -0.24, 0.24, 0.3); box(ar, 0.09, 0.24, 0.11, tan, 0, -0.17, -0.02, -0.3);
+  ar.position.set(0.18, 0.1, 0); m.auto = ar;
+  // Shotgun: two barrels side by side, wooden stock and forend
+  const sg = new THREE.Group();
+  pipe(sg, 0.05, 1.0, metal, -0.05, 0.03, 0.55); pipe(sg, 0.05, 1.0, metal, 0.05, 0.03, 0.55);
+  box(sg, 0.16, 0.12, 0.34, wood, 0, -0.05, 0.42); box(sg, 0.14, 0.14, 0.2, dark, 0, 0, 0.0); box(sg, 0.12, 0.22, 0.55, wood, 0, -0.07, -0.33, 0.12);
+  sg.position.set(0.18, 0.1, 0); m.shotgun = sg;
+  // Flare gun: chunky orange plastic, very wide short barrel
+  const fl = new THREE.Group(), orange = phong(0xff6b17);
+  pipe(fl, 0.09, 0.34, orange, 0, 0.02, 0.22); box(fl, 0.14, 0.14, 0.22, orange, 0, 0, -0.02);
+  box(fl, 0.11, 0.28, 0.14, orange, 0, -0.19, -0.06, -0.3); pipe(fl, 0.06, 0.02, dark, 0, 0.02, 0.4);
+  fl.position.set(0.05, 0.05, 0.05); m.flare = fl;
+  const ps = new THREE.Group();
+  const pb = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.13, 0.45), metal); pb.position.z = 0.2; ps.add(pb);
+  const pg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.26, 0.13), dark); pg.position.set(0, -0.15, 0.02); pg.rotation.x = -0.25; ps.add(pg);
+  ps.position.set(0.05, 0.05, 0.05); m.pistol = ps;
+  // Toy dart blaster: orange body, yellow barrel, blue grip, a foam dart poking out
+  const dt = new THREE.Group();
+  const db = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.2, 0.5), phong(0xff8a1f)); db.position.z = 0.1; dt.add(db);
+  const dbar = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.34, 10), phong(0xffd447)); dbar.rotation.x = Math.PI / 2; dbar.position.z = 0.48; dt.add(dbar);
+  const dg = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.28, 0.14), phong(0x2f6fe0)); dg.position.set(0, -0.2, -0.04); dg.rotation.x = -0.3; dt.add(dg);
+  const dh = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.26), phong(0xffd447)); dh.position.set(0, 0.14, -0.02); dt.add(dh);
+  const foam = new THREE.Mesh(new THREE.CylinderGeometry(0.038, 0.038, 0.22, 8), phong(0x3db8ff)); foam.rotation.x = Math.PI / 2; foam.position.z = 0.7; dt.add(foam);
+  const tipM = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), phong(0xff6b17)); tipM.position.z = 0.82; dt.add(tipM);
+  dt.position.set(0.05, 0.05, 0.02); m.dart = dt;
+  return m;
+}
+// Weapons as seen in first person: bottom right of the screen, with chunky fists in the player's colour
+const vm = { models: {}, handMat: phong(0xff5fa2), recoil: 0, switchT: 0, current: null };
+(function buildViewmodel() {
+  const src = makeWeaponModels();
+  const fist = (x, y, z, s) => { const h = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1 * (s || 1), 1), vm.handMat); h.position.set(x, y, z); return h; };
+  const place = { // [x, y, z, scale] in camera space, plus fist positions in the weapon's own space
+    bazooka: [0.42, -0.34, -0.85, 0.66, [[0, -0.32, 0.12, 1.3], [-0.05, -0.2, 0.62, 1.2]]],
+    grenade:  [0.3, -0.3, -0.78, 0.8, [[0, -0.26, -0.1, 1.2], [0, -0.12, 0.42, 1.1]]],
+    sniper:  [0.24, -0.27, -0.62, 0.8, [[0.02, -0.16, -0.08, 1.2], [0, -0.1, 0.6, 1.1]]],
+    auto:    [0.25, -0.28, -0.66, 0.82, [[0, -0.2, -0.04, 1.2], [0, -0.1, 0.5, 1.1]]],
+    shotgun:   [0.25, -0.28, -0.68, 0.82, [[0, -0.18, -0.12, 1.2], [0, -0.13, 0.42, 1.1]]],
+    pistol:  [0.2, -0.24, -0.55, 1.15, [[0, -0.24, -0.02, 1.2]]],
+    flare:   [0.22, -0.26, -0.62, 1.0, [[0, -0.24, -0.06, 1.2]]],
+    dart:    [0.27, -0.28, -0.8, 0.78, [[0, -0.24, -0.06, 1.3]]]
+  };
+  for (const [id, model] of Object.entries(src)) {
+    const [x, y, z, s, fists] = place[id];
+    const wrap = new THREE.Group();
+    model.position.set(0, 0, 0); model.visible = true; wrap.add(model);
+    for (const f of fists) model.add(fist(f[0], f[1], f[2], f[3]));
+    wrap.rotation.y = Math.PI; wrap.position.set(x, y, z); wrap.scale.setScalar(s); wrap.visible = false;
+    vmRoot.add(wrap); vm.models[id] = wrap;
+  }
+})();
+function vmShow(id) {
+  if (vm.current === id) return;
+  if (vm.current) vm.switchT = 1;
+  Object.entries(vm.models).forEach(([k, w]) => { w.visible = k === id; });
+  vm.current = id;
+}
+function updateViewmodel(dt, visible) {
+  vmRoot.visible = visible;
+  if (!visible) return;
+  vm.recoil = Math.max(0, vm.recoil - dt * 3.5); vm.switchT = Math.max(0, vm.switchT - dt * 4);
+  const sw = REDUCED ? 0 : 1;
+  vmRoot.position.set(Math.sin(T * 1.7) * 0.006 * sw, Math.sin(T * 3.4) * 0.005 * sw - vm.switchT * 0.35, vm.recoil * 0.18);
+  vmRoot.rotation.set(vm.recoil * 0.35, 0, 0);
+  const w = vm.models[vm.current]; if (w) w.rotation.x = aimOffset() * Math.PI / 180 * 0.9; // barrel tilts up toward the raised crosshair
+}
+function makeHat(kind, color) {
+  const g = new THREE.Group();
+  if (kind === 'cone') {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.85, 10), phong(0xff7a1a)); c.position.y = 0.42; g.add(c);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.21, 0.26, 0.15, 10), phong(0xffffff)); band.position.y = 0.38; g.add(band);
+    const base = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.07, 0.78), phong(0xff7a1a)); base.position.y = 0.02; g.add(base);
+    g.position.set(0.04, 2.47, 0); g.rotation.z = 0.28;
+  } else if (kind === 'viking') {
+    const helm = new THREE.Mesh(new THREE.SphereGeometry(0.56, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), phong(0x9aa3a8, { side: THREE.DoubleSide })); g.add(helm);
+    const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.09, 12), phong(0x707a80)); brim.position.y = 0.03; g.add(brim);
+    for (const s of [-1, 1]) { const h = new THREE.Mesh(new THREE.ConeGeometry(0.11, 0.55, 7), phong(0xf1e7c8)); h.position.set(s * 0.56, 0.32, 0); h.rotation.z = -s * 0.95; g.add(h); }
+    g.position.y = 2.0;
+  } else if (kind === 'propeller') {
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), phong(0xe8322b, { side: THREE.DoubleSide })); g.add(cap);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.3, 5), phong(0x333333)); stem.position.y = 0.66; g.add(stem);
+    const prop = new THREE.Group(); prop.position.y = 0.8;
+    const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.03, 0.14), phong(0x3db8ff)); prop.add(b1);
+    const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.03, 0.8), phong(0xffcf3d)); prop.add(b2);
+    g.add(prop); g.userData.prop = prop; g.position.y = 2.03;
+  } else {
+    const c = new THREE.Mesh(new THREE.ConeGeometry(0.27, 0.8, 10), phong(0x3ad08f)); c.position.y = 0.4; g.add(c);
+    const pom = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 0), phong(0xffffff)); pom.position.y = 0.82; g.add(pom);
+    g.position.set(-0.08, 2.42, 0); g.rotation.z = -0.22;
+  }
+  return g;
+}
+function makeChar(style, name) {
+  const group = new THREE.Group(), inner = new THREE.Group(); group.add(inner); inner.scale.setScalar(CHAR_S);
+  const col = new THREE.Color(style.color), bodyMat = phong(col);
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.72, 9, 7), bodyMat); body.scale.set(1, 1.12, 0.95); body.position.y = 0.95; inner.add(body);
+  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), phong(col.clone().lerp(new THREE.Color('#ffffff'), 0.5))); belly.scale.set(1, 1.1, 0.6); belly.position.set(0, 0.85, 0.43); inner.add(belly);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.52, 10, 8), bodyMat); head.position.y = 2.0; inner.add(head);
+  const eyeMat = new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 80 }), pupMat = new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 100 });
+  const pupils = [];
+  for (const sx of [-1, 1]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.21, 14, 12), eyeMat); eye.position.set(0.2 * sx, 2.12, 0.4); eye.scale.setScalar(sx < 0 ? 1 : 1.22); inner.add(eye);
+    const pup = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), pupMat); pup.position.set(0, 0, 0.17); eye.add(pup);
+    pupils.push({ mesh: pup, ox: 0, oy: 0, vx: 0, vy: 0 });
+  }
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), phong(0xffb199)); nose.scale.set(1, 0.85, 1.1); nose.position.set(0, 1.94, 0.5); inner.add(nose);
+  const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.15, 0.05), phong(0xffffff)); tooth.position.set(0.05, 1.73, 0.47); inner.add(tooth);
+  const footMat = phong(col.clone().multiplyScalar(0.55));
+  for (const s of [-1, 1]) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), footMat); f.scale.set(1, 0.45, 1.5); f.position.set(s * 0.32, 0.09, 0.12); inner.add(f); }
+  for (const s of [-1, 1]) {
+    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.6, 6), bodyMat);
+    arm.position.set(s * 0.5, 1.2, 0.35); arm.rotation.x = 1.25; arm.rotation.z = -s * 0.5; inner.add(arm);
+  }
+  const hat = makeHat(style.hat, style.color); inner.add(hat);
+  const hold = new THREE.Group(); hold.position.set(0, 1.2, 0.62); inner.add(hold);
+  const weapons = makeWeaponModels(); Object.values(weapons).forEach(w => { w.visible = false; hold.add(w); });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(1.25, 1.6, 30), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.85, depthWrite: false }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.08; ring.visible = false; group.add(ring);
+  const label = makeLabel(name, style.color); label.position.y = 3.65 * CHAR_S; group.add(label);
+  scene.add(group);
+  return { group, inner, pupils, weapons, ring, label, prop: hat.userData.prop || null, mode: 'idle', target: null, fly: null, poofT: 0, recoil: 0, phase: Math.random() * 6, weapon: null };
+}
+function showWeapon(c, id) { if (c.weapon === id) return; Object.entries(c.weapons).forEach(([k, m]) => { m.visible = k === id; }); c.weapon = id; }
+
+function setCharTarget(c, x, y, z, instant) {
+  c.target = { x, y, z };
+  if (instant) { c.group.position.set(x, y, z); c.mode = 'idle'; c.inner.scale.setScalar(CHAR_S); return; }
+  if (c.mode === 'fly' || c.mode === 'poof') return;
+  const d = Math.hypot(c.group.position.x - x, c.group.position.z - z);
+  if (d < 0.05 && Math.abs(c.group.position.y - y) < 0.05) return;
+  if (d > 6) { c.mode = 'poof'; c.poofT = 0; c.poofed = false; sfx.poof(); puff(c.group.position.x, c.group.position.y + 1, c.group.position.z, 0xffffff, 10); }
+  else c.mode = 'walk';
+}
+function launchFly(c, to, dur, height) {
+  const from = c.group.position.clone();
+  c.target = { x: to.x, y: to.y, z: to.z };
+  c.fly = { from, to: new THREE.Vector3(to.x, to.y, to.z), t: 0, dur, height, ax: Math.random() - 0.5, az: Math.random() - 0.5 };
+  c.mode = 'fly';
+}
+function updateChar(c, dt, p) {
+  const g = c.group, inner = c.inner;
+  if (c.mode === 'fly') {
+    const f = c.fly; f.t += dt / f.dur; const u = Math.min(1, f.t);
+    g.position.set(lerp(f.from.x, f.to.x, u), lerp(f.from.y, f.to.y, u) + 4 * f.height * u * (1 - u), lerp(f.from.z, f.to.z, u));
+    inner.rotation.x += (8 + f.ax * 6) * dt; inner.rotation.z += (6 + f.az * 8) * dt;
+    if (u >= 1) {
+      c.mode = 'idle'; inner.rotation.set(0, 0, 0);
+      puff(g.position.x, g.position.y + 0.3, g.position.z, 0xb8a06a, 12); sfx.bounce(8);
+      const t = c.target; if (t) setCharTarget(c, t.x, t.y, t.z, false);
+    }
+  } else if (c.mode === 'poof') {
+    c.poofT += dt;
+    if (c.poofT < 0.18) inner.scale.setScalar(CHAR_S * (1 - c.poofT / 0.18));
+    else {
+      if (!c.poofed) { c.poofed = true; g.position.set(c.target.x, c.target.y, c.target.z); puff(c.target.x, c.target.y + 1, c.target.z, 0xffffff, 10); }
+      const u = Math.min(1, (c.poofT - 0.18) / 0.3);
+      inner.scale.setScalar(CHAR_S * (u < 1 ? (1 + Math.sin(u * Math.PI) * 0.25) * u : 1));
+      if (u >= 1) { c.mode = 'idle'; inner.scale.setScalar(CHAR_S); }
+    }
+  } else if (c.mode === 'walk') {
+    const t = c.target, dx = t.x - g.position.x, dz = t.z - g.position.z, d = Math.hypot(dx, dz), st = 7 * dt;
+    if (d <= st) { g.position.set(t.x, t.y, t.z); c.mode = 'idle'; inner.rotation.z = 0; }
+    else { g.position.x += dx / d * st; g.position.z += dz / d * st; g.position.y = world.M.height(g.position.x, g.position.z); inner.rotation.z = Math.sin(T * 18) * 0.15; }
+  }
+  if (c.mode === 'idle' || c.mode === 'walk') {
+    if (p && p.done) inner.position.y = Math.abs(Math.sin(T * 6 + c.phase)) * 0.6;
+    else inner.position.y = Math.sin(T * 3 + c.phase) * 0.05;
+  }
+  c.recoil = Math.max(0, c.recoil - dt * 4); inner.position.z = -c.recoil * 0.35;
+  // face direction
+  let want = g.rotation.y;
+  if (p && state.players[state.cur] === p && (state.phase === 'aim' || state.phase === 'pick' || state.phase === 'flight')) want = state.yaw;
+  else if (p && p.done) want = Math.atan2(camera.position.x - g.position.x, camera.position.z - g.position.z);
+  else if (state.cur >= 0 && state.players[state.cur]) { const q = state.players[state.cur].char.group.position; if (q !== g.position) want = Math.atan2(q.x - g.position.x, q.z - g.position.z); }
+  if (c.mode !== 'fly') g.rotation.y = angLerp(g.rotation.y, want, 1 - Math.exp(-dt * 8));
+  // googly pupils: a random glance now and then, constant rattling while moving
+  const busy = c.mode !== 'idle';
+  const glance = T > (c.nextGlance || 0);
+  if (glance) c.nextGlance = T + 0.6 + Math.random() * 1.8;
+  for (const pp of c.pupils) {
+    if (glance || busy) { const kk = busy ? 0.25 : 0.9; pp.vx += (Math.random() - 0.5) * kk; pp.vy += (Math.random() - 0.5) * kk; }
+    pp.vx += (-pp.ox * 90 - pp.vx * 4) * dt;
+    pp.vy += (-pp.oy * 90 - pp.vy * 4) * dt;
+    pp.ox = clamp(pp.ox + pp.vx * dt, -0.08, 0.08); pp.oy = clamp(pp.oy + pp.vy * dt, -0.08, 0.08);
+    pp.mesh.position.x = pp.ox; pp.mesh.position.y = pp.oy;
+  }
+  if (c.prop) c.prop.rotation.y += dt * (c.mode === 'fly' ? 40 : 12);
+  if (c.ring.visible) { const s = 1 + Math.sin(T * 5) * 0.06; c.ring.scale.set(s, s, s); }
+}
+function charsSettled() { return state.players.every(p => p.char.mode === 'idle'); }
+
+/* ================= particles ================= */
+const parts = [], partGeo = new THREE.IcosahedronGeometry(1, 0);
+function spawn(o) {
+  let p = null;
+  for (const q of parts) if (!q.alive) { p = q; break; }
+  if (!p) {
+    if (parts.length > 260) return;
+    const m = new THREE.Mesh(partGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })); m.frustumCulled = false; scene.add(m);
+    p = { mesh: m }; parts.push(p);
+  }
+  p.alive = true; p.age = 0;
+  p.x = o.x; p.y = o.y; p.z = o.z; p.vx = o.vx || 0; p.vy = o.vy || 0; p.vz = o.vz || 0;
+  p.size = o.size || 0.3; p.grow = o.grow || 0; p.life = o.life || 0.6; p.o0 = o.opacity == null ? 1 : o.opacity; p.grav = o.grav || 0; p.drag = o.drag || 0;
+  p.mesh.material.color.set(o.color); p.mesh.visible = true;
+}
+function updateParts(dt) {
+  for (const p of parts) {
+    if (!p.alive) continue;
+    p.age += dt;
+    if (p.age >= p.life) { p.alive = false; p.mesh.visible = false; continue; }
+    p.vy -= p.grav * G * dt; const k = 1 - p.drag * dt; p.vx *= k; p.vy *= k; p.vz *= k;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+    const u = p.age / p.life;
+    p.mesh.position.set(p.x, p.y, p.z); p.mesh.scale.setScalar(Math.max(0.01, p.size + p.grow * p.age));
+    p.mesh.material.opacity = p.o0 * (1 - u * u);
+  }
+}
+function clearParts() { for (const p of parts) { p.alive = false; p.mesh.visible = false; } }
+function puff(x, y, z, color, n) {
+  for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2; spawn({ x, y, z, vx: Math.cos(a) * 3, vy: 1 + Math.random() * 2, vz: Math.sin(a) * 3, size: 0.35, grow: 1.2, life: 0.55, color, opacity: 0.85, drag: 3 }); }
+}
+function dirtPuff(x, y, z, v, surf) {
+  const color = surf === 'sand' ? 0xe8d49a : surf === 'green' || surf === 'fairway' || surf === 'tee' ? 0x7cbf55 : surf === 'crate' ? 0x8a6a3a : 0x6b5a33;
+  const n = Math.min(14, 3 + Math.floor(v / 2));
+  for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * v * 0.15; spawn({ x, y: y + 0.1, z, vx: Math.cos(a) * s, vy: 2 + Math.random() * v * 0.3, vz: Math.sin(a) * s, size: 0.12 + Math.random() * 0.12, life: 0.7, color, grav: 1 }); }
+}
+
+/* ================= camera ================= */
+const cam = { pos: new THREE.Vector3(60, 60, 60), look: new THREE.Vector3(), dPos: new THREE.Vector3(), dLook: new THREE.Vector3(), k: 3, shake: 0, hdir: new THREE.Vector3(0, 0, -1), arrived: false };
+function shake(a) { if (!REDUCED) cam.shake = Math.max(cam.shake, a); }
+function keepAbove(v, m) { const M = world.M; if (!M) return; const h = M.height(v.x, v.z) + m; if (v.y < h) v.y = h; }
+function updateCamera(dt) {
+  const M = world.M; if (!M) return;
+  let k = 3;
+  if (state.phase === 'setup' || state.phase === 'between' || state.phase === 'end') {
+    const mid = { x: (M.tee.x + M.cup.x) / 2, z: (M.tee.z + M.cup.z) / 2 }, a = T * 0.06;
+    cam.dPos.set(mid.x + Math.cos(a) * 150, 85, mid.z + Math.sin(a) * 150); cam.dLook.set(mid.x, 0, mid.z); k = 1.5;
+  } else if (state.phase === 'aim' || state.phase === 'pick' || (state.phase === 'flight' && state.shot && state.shot.age < 0.35)) {
+    // First person: the eye of the current player, looking along the crosshair
+    const p = state.players[state.cur], W = state.phase === 'flight' ? state.shot.W : WEAPONS[state.weapon];
+    // The view rises only about half as much as the barrel, so the course stays in sight on high lobs
+    const pr = (state.pitch - aimOffset()) * Math.PI / 180, dx = Math.sin(state.yaw) * Math.cos(pr), dy = Math.sin(pr), dz = Math.cos(state.yaw) * Math.cos(pr);
+    cam.dPos.set(p.ball.x, p.ball.y + W.eye, p.ball.z);
+    cam.dLook.set(cam.dPos.x + dx * 20, cam.dPos.y + dy * 20, cam.dPos.z + dz * 20);
+    if (!cam.arrived && cam.pos.distanceTo(cam.dPos) < 0.3 && cam.look.distanceTo(cam.dLook) < 0.6) cam.arrived = true;
+    if (cam.arrived) {
+      cam.pos.lerp(cam.dPos, 1 - Math.exp(-12 * dt));
+      cam.look.set(cam.pos.x + dx * 20, cam.pos.y + dy * 20, cam.pos.z + dz * 20);
+      applyCamera(dt); return;
+    }
+    k = 3.2;
+  } else if (state.phase === 'choose' && state.choice) {
+    // Look down over the bullets to choose between
+    let cx = 0, cz = 0, cy = 0; for (const q of state.choice) { cx += q.b.x; cy += q.b.y; cz += q.b.z; }
+    const n = state.choice.length; cx /= n; cy /= n; cz /= n;
+    cam.dPos.set(cx - cam.hdir.x * 20, cy + 16, cz - cam.hdir.z * 20); keepAbove(cam.dPos, 3);
+    cam.dLook.set(cx, cy, cz); k = 2.5;
+  } else if ((state.phase === 'flight' || state.phase === 'settle') && state.shot) {
+    const b = state.shot.projs[state.shot.primary].b, hv = Math.hypot(b.vx, b.vz);
+    if (state.phase === 'flight' && hv > 1.5) { const tx = b.vx / hv, tz = b.vz / hv; cam.hdir.x = lerp(cam.hdir.x, tx, 1 - Math.exp(-dt * 3)); cam.hdir.z = lerp(cam.hdir.z, tz, 1 - Math.exp(-dt * 3)); cam.hdir.y = 0; cam.hdir.normalize(); }
+    cam.dPos.set(b.x - cam.hdir.x * 13, b.y + 5, b.z - cam.hdir.z * 13); keepAbove(cam.dPos, 2.5);
+    cam.dLook.set(b.x + cam.hdir.x * 5, b.y + 0.5, b.z + cam.hdir.z * 5);
+    k = state.phase === 'flight' ? 6 : 2;
+  }
+  const f = 1 - Math.exp(-k * dt);
+  cam.pos.lerp(cam.dPos, f); cam.look.lerp(cam.dLook, f);
+  applyCamera(dt);
+}
+function applyCamera(dt) {
+  camera.position.copy(cam.pos);
+  if (cam.shake > 0.01) { camera.position.x += (Math.random() - 0.5) * cam.shake; camera.position.y += (Math.random() - 0.5) * cam.shake; cam.shake *= Math.exp(-dt * 5); }
+  camera.lookAt(cam.look);
+  const zf = lerp(state.zoomF, state.zoom && state.phase === 'aim' ? (WEAPONS[state.weapon].zoom || 3) : 1, 1 - Math.exp(-dt * 10));
+  if (Math.abs(zf - state.zoomF) > 0.001) { state.zoomF = zf; camera.fov = baseFov / zf; camera.updateProjectionMatrix(); }
+}
+function fpView() { return ((state.phase === 'aim' || state.phase === 'pick') && cam.arrived) || (state.phase === 'flight' && state.shot && state.shot.age < 0.35); }
+// Degrees the crosshair sits above the centre of the view. Zero when zoomed, for precise shots.
+function aimOffset() { return clamp(state.pitch * 0.45, 0, 22) * clamp((3 - state.zoomF) / 2, 0, 1); }
+
+/* ================= reticle ================= */
+const tmpV = new THREE.Vector3();
+let retCache = '';
+function setPitch(v) { const W = WEAPONS[state.weapon]; state.pitch = clamp(v, W.pitchMin, W.pitchMax); }
+function updateReticle() {
+  const show = state.phase === 'aim' && cam.arrived;
+  if (ui.reticle.hidden === show) ui.reticle.hidden = !show;
+  if (!show) return;
+  const W = WEAPONS[state.weapon], me = state.players[state.cur];
+  // Put the crosshair where the barrel actually points
+  const pr = state.pitch * Math.PI / 180;
+  tmpV.set(camera.position.x + Math.sin(state.yaw) * Math.cos(pr) * 100, camera.position.y + Math.sin(pr) * 100, camera.position.z + Math.cos(state.yaw) * Math.cos(pr) * 100).project(camera);
+  const cx = tmpV.x, cy = tmpV.y;
+  const ty = (-cy * canvas.clientHeight / 2).toFixed(1), tx = (cx * canvas.clientWidth / 2).toFixed(1);
+  const tf = `translate(${tx}px, ${ty}px)`;
+  if (ui.retMove.style.transform !== tf) ui.retMove.style.transform = tf;
+  // Rangefinder: name and distance of whoever sits under the crosshair, otherwise the flag
+  let target = null, best = 0.07 * state.zoomF;
+  state.players.forEach((p, i) => {
+    if (i === state.cur || p.done) return;
+    const c = p.char.group.position;
+    tmpV.set(c.x, c.y + 2.0 * CHAR_S, c.z).project(camera);
+    if (tmpV.z > 1) return;
+    const d = Math.hypot((tmpV.x - cx) * camera.aspect, tmpV.y - cy);
+    if (d < best) { best = d; target = p; }
+  });
+  const pitchTxt = (state.pitch > 0.05 ? '+' : '') + state.pitch.toFixed(1) + '°' + (state.charging ? ` · ${Math.round(state.power * 100)}%` : '');
+  const tc = target && target.char.group.position;
+  const tgt = target ? `${target.name} · ${Math.round(Math.hypot(tc.x - me.ball.x, tc.z - me.ball.z))} m` : `Flag · ${Math.round(distToCup(me))} m`;
+  const key = pitchTxt + tgt + (target ? target.color : '') + state.weapon + state.zoom;
+  if (key === retCache) return;
+  retCache = key;
+  ui.retPitch.textContent = pitchTxt;
+  ui.retTarget.textContent = tgt;
+  ui.retTarget.style.color = target ? target.color : '';
+  ui.reticle.classList.toggle('locked', !!target);
+  ui.rlMax.textContent = W.pitchMax + '°'; ui.rlMin.textContent = W.pitchMin + '°';
+  ui.rlMark.style.bottom = ((state.pitch - W.pitchMin) / (W.pitchMax - W.pitchMin) * 100).toFixed(1) + '%';
+  ui.zoom.textContent = state.zoom ? 'Zoom ' + (W.zoom || 3) + '×' : 'Zoom 1×'; ui.zoom.setAttribute('aria-pressed', state.zoom ? 'true' : 'false');
+}
+
+/* ================= wind readout and sniper scope marker ================= */
+let windCache = '';
+// Arrow relative to where you aim: pointing up means tailwind
+function updateWindHUD() {
+  const M = world.M; if (!M || !M.wind) return;
+  const w = M.wind;
+  let rel = w.dir - state.yaw; while (rel > Math.PI) rel -= Math.PI * 2; while (rel < -Math.PI) rel += Math.PI * 2;
+  const deg = Math.round(-rel * 180 / Math.PI), a = Math.abs(rel) * 180 / Math.PI;
+  const txt = w.speed < 0.6 ? 'almost calm' : a < 35 ? 'tailwind' : a > 145 ? 'headwind' : (rel > 0 ? 'from the right' : 'from the left');
+  const key = deg + '|' + fmt1(w.speed) + txt;
+  if (key === windCache) return; windCache = key;
+  ui.windArrow.style.transform = `rotate(${deg}deg)`;
+  ui.hcWind.textContent = fmt1(w.speed); ui.hcWindRel.textContent = txt;
+}
+const landMark = new THREE.Mesh(new THREE.RingGeometry(0.9, 1.4, 28), new THREE.MeshBasicMaterial({ color: 0xff3b5c, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false }));
+landMark.rotation.x = -Math.PI / 2; landMark.renderOrder = 12; landMark.visible = false; scene.add(landMark);
+// The sniper scope shows where the bullet would land at the current power, ignoring wind
+function updateLandMark() {
+  const W = WEAPONS[state.weapon], p = state.players[state.cur];
+  const on = state.phase === 'aim' && W.id === 'sniper' && state.zoom && cam.arrived && !!p;
+  landMark.visible = on; if (!on) return;
+  const M = world.M, calm = Object.create(M); calm.wind = null;
+  const power = (state.charging ? Math.max(0.04, state.power) : 1) * lieFactor(W, M.surface(p.ball.x, p.ball.z));
+  const b = launchState(W, power, state.yaw, state.pitch, p.ball);
+  for (let t = 0; t < 4; t += 1 / 120) { stepBall(b, 1 / 120, W, calm, true); if (b.contact) break; }
+  landMark.position.set(b.x, (b.contact ? b.y - BALL_R : M.height(b.x, b.z)) + 0.08, b.z);
+  const pulse = 1 + Math.sin(T * 8) * 0.08; landMark.scale.set(pulse, pulse, pulse);
+}
+
+/* ================= HUD ================= */
+const ui = {
+  hud: $('#hud'), setup: $('#setup'), board: $('#board'), bag: $('#bag'), pick: $('#pick'), pickTitle: $('#pickTitle'), pickInfo: $('#pickInfo'), pickFoot: $('#pickFoot'),
+  bagBtn: $('#bagBtn'), lockPrompt: $('#lockPrompt'), retPower: $('#retPower'), fire: $('#fireBtn'), fill: $('#fireFill'), fireSub: $('#fireSub'),
+  hint: $('#hint'), banner: $('#banner'), callout: $('#callout'), coBig: $('#coBig'), coSmall: $('#coSmall'), toast: $('#toast'),
+  map: $('#map'), mute: $('#muteBtn'), zoom: $('#zoomBtn'), left: $('#leftBtn'), right: $('#rightBtn'), up: $('#upBtn'), down: $('#downBtn'),
+  choose: $('#choose'), chooseRow: $('#chooseRow'), windArrow: $('#windArrow'), hcWind: $('#hcWind'), hcWindRel: $('#hcWindRel'),
+  reticle: $('#reticle'), retMove: $('#retMove'), retPitch: $('#retPitch'), retTarget: $('#retTarget'), rlMax: $('#rlMax'), rlMin: $('#rlMin'), rlMark: $('#rlMark')
+};
+// A mouse with pointer lock gives FPS-style aiming. Touch devices keep drag-to-aim and the Fire button.
+const MOUSE = !COARSE && !!window.matchMedia && matchMedia('(pointer: fine)').matches;
+const FX = { bazooka: 'Rocket motor. Tailwind adds speed.', grenade: 'Energy burst after the first bounce.', sniper: '5× scope shows the landing spot.', auto: 'Three bullets. You pick which one counts.',
+  shotgun: 'Pulled toward the hole in the last 12 m.', pistol: 'Floats down and stops fast.', flare: 'No power loss in sand or rough.', dart: 'Drops steeply. Easy to putt with.' };
+ui.bag.innerHTML = WEAPONS.map((w, i) => `<button type="button" class="bagitem" role="radio" data-i="${i}" aria-checked="false" aria-label="${w.name}, ${w.club}, up to ${w.range} metres, precision ${w.precision} of 10. ${FX[w.id]}">
+  <span class="bi-top"><span>${w.club}</span><span class="bi-key">${i + 1}</span></span>
+  <span class="bi-name">${w.name}</span>
+  <span class="bi-row"><span class="bi-range" data-range>≤ ${w.range} m</span><span class="bi-pips">${Array.from({ length: 10 }, (_, k) => `<i class="${k < w.precision ? 'on' : ''}"></i>`).join('')}</span></span>
+  <span class="bi-fx">${FX[w.id]}</span></button>`).join('');
+const wbtns = [...ui.bag.querySelectorAll('.bagitem')];
+wbtns.forEach((b, i) => b.addEventListener('click', () => confirmPick(i)));
+function selectWeapon(i) {
+  state.weapon = i; state.pitch = WEAPONS[i].pitchDef; retCache = '';
+  wbtns.forEach((b, k) => b.setAttribute('aria-checked', k === i ? 'true' : 'false'));
+  const p = state.players[state.cur]; if (p) showWeapon(p.char, WEAPONS[i].id);
+  vmShow(WEAPONS[i].id);
+  setHint();
+}
+function windText() {
+  const w = world.M && world.M.wind; if (!w) return '';
+  let rel = w.dir - state.yaw; while (rel > Math.PI) rel -= Math.PI * 2; while (rel < -Math.PI) rel += Math.PI * 2;
+  const a = Math.abs(rel) * 180 / Math.PI;
+  return w.speed < 0.6 ? 'almost calm' : a < 35 ? 'tailwind' : a > 145 ? 'headwind' : (rel > 0 ? 'from the right' : 'from the left');
+}
+// The golf bag opens at the start of every turn (recommended weapon marked) and again on Q / "Switch weapon"
+function openPick(fresh) {
+  const p = state.players[state.cur], M = world.M; if (!p) return;
+  cancelCharge(); setZoom(false); exitLock(); holds.clear();
+  state.phase = 'pick';
+  const surf = M.surface(p.ball.x, p.ball.z), rec = autoWeapon(p);
+  if (fresh) selectWeapon(rec);
+  ui.pickTitle.textContent = state.players.length > 1 ? `${genitive(p.name)} turn · stroke ${p.strokes + 1}` : `Stroke ${p.strokes + 1}`;
+  ui.pickInfo.textContent = `${Math.round(distToCup(p))} m to the flag · ${SURF_NAME[surf] || surf} · wind ${fmt1(M.wind.speed)} m/s ${windText()}`;
+  wbtns.forEach((b, k) => {
+    b.classList.toggle('rec', k === rec);
+    const old = b.querySelector('.bi-rec'); if (old) old.remove();
+    if (k === rec) { const r = document.createElement('span'); r.className = 'bi-rec'; r.textContent = 'Recommended'; b.prepend(r); }
+    const W = WEAPONS[k], lf = lieFactor(W, surf), rg = b.querySelector('[data-range]');
+    rg.innerHTML = lf < 1 ? `≤ ${Math.round(W.range * lf / 5) * 5} m<small>${surf === 'sand' ? 'sand' : 'rough'}</small>` : `≤ ${W.range} m`;
+  });
+  ui.pickFoot.textContent = MOUSE ? 'Click a weapon or press 1–8. Enter takes the highlighted one.' : 'Tap the weapon you want to use.';
+  ui.pick.hidden = false; ui.hud.classList.add('picking');
+  setControls(false);
+  const sel = wbtns[state.weapon]; if (sel && MOUSE) sel.focus({ preventScroll: true });
+}
+function confirmPick(i) {
+  if (state.phase !== 'pick') return;
+  sfx.unlock();
+  selectWeapon(i);
+  ui.pick.hidden = true; ui.hud.classList.remove('picking');
+  state.phase = 'aim'; setControls(true); retCache = '';
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  if (mouseMode()) requestLock(); // the click or key press that picked the weapon also locks the mouse
+  setHint();
+}
+// Pointer lock: the crosshair follows the mouse with no button held. Falls back to drag-to-aim if the browser refuses.
+let lockErrors = 0, lastUnlockT = 0;
+function mouseMode() { return MOUSE && !state.lockFailed; }
+function requestLock() {
+  if (!canvas.requestPointerLock) { state.lockFailed = true; setHint(); return; }
+  try { const r = canvas.requestPointerLock(); if (r && typeof r.catch === 'function') r.catch(onLockError); } catch (e) { onLockError(); }
+}
+function exitLock() { if (document.pointerLockElement && document.exitPointerLock) document.exitPointerLock(); }
+function onLockError() {
+  if (state.locked) return;
+  if (performance.now() - lastUnlockT < 1600) return; // the browser blocks relocking right after Esc; just wait for the next click
+  if (++lockErrors >= 2) { state.lockFailed = true; setHint(); toast('Your browser will not let the game lock the mouse. Drag to aim instead.'); }
+}
+document.addEventListener('pointerlockchange', () => {
+  state.locked = document.pointerLockElement === canvas;
+  if (state.locked) lockErrors = 0;
+  else { lastUnlockT = performance.now(); cancelCharge(); if (state.zoom) setZoom(false); }
+});
+document.addEventListener('pointerlockerror', onLockError);
+document.addEventListener('mousemove', e => {
+  if (!state.locked || state.phase !== 'aim') return;
+  if (Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return; // some browsers send one huge jump right after locking
+  const sens = 0.0022 / state.zoomF;
+  state.yaw -= e.movementX * sens;
+  setPitch(state.pitch - e.movementY * sens * 57.3);
+});
+function updateLockUI() {
+  const mm = mouseMode();
+  if (ui.hud.classList.contains('mousemode') !== mm) ui.hud.classList.toggle('mousemode', mm);
+  const prompt = mm && state.phase === 'aim' && !state.locked;
+  if (ui.lockPrompt.hidden === prompt) ui.lockPrompt.hidden = !prompt;
+}
+ui.lockPrompt.addEventListener('click', () => { sfx.unlock(); requestLock(); });
+function setHint() {
+  const W = WEAPONS[state.weapon], surf = world.M && state.players[state.cur] ? currentLie() : 'fairway';
+  let lie = '';
+  if (surf === 'sand') lie = W.sandProof ? 'Bunker, but the flare gun loses no power here. ' : 'You are in the bunker: −45% power. The flare gun loses nothing. ';
+  else if (surf === 'rough' && !W.sandProof) lie = 'Rough: −15% power. ';
+  const controls = mouseMode() ? 'The mouse aims. Hold the left button for power and release to fire. Right button zooms. Q switches weapon, 1–8 for a quick switch. Esc frees the mouse.'
+    : COARSE ? 'Drag to look around and aim. ▲ ▼ change the angle. Hold Fire for power.'
+    : 'Drag with the mouse or use the arrow keys to aim. Hold Space for power. Q switches weapon.';
+  const base = state.shotsFired < 2 ? controls : `${W.name} (${W.club}, precision ${W.precision}/10). ${W.tip}`;
+  ui.hint.textContent = lie + base;
+}
+function setControls(on) {
+  [ui.fire, ui.left, ui.right, ui.up, ui.down, ui.zoom, ui.bagBtn].forEach(b => { b.disabled = !on; });
+}
+function cancelCharge() { if (!state.charging) return; state.charging = false; ui.fire.classList.remove('charging'); setFill(0); }
+function setZoom(on) { state.zoom = on; retCache = ''; if (on) sfx.unlock(); }
+function distToCup(p) { const M = world.M; return Math.hypot(p.ball.x - M.cup.x, p.ball.z - M.cup.z); }
+function updateHUD() {
+  const def = HOLES[state.holeIdx], p = state.players[state.cur];
+  $('#hcHole').textContent = state.holeIdx + 1; $('#hcPar').textContent = def.par; $('#hcName').textContent = def.name;
+  if (p) {
+    $('#hcChip').style.background = p.color; $('#hcPlayer').textContent = p.name;
+    $('#hcStroke').textContent = p.done ? p.strokes : p.strokes + 1; $('#hcDist').textContent = Math.round(distToCup(p));
+  }
+}
+let bannerTO = 0, calloutTO = 0, toastTO = 0;
+function showBanner(text, sub, color) {
+  ui.banner.innerHTML = ''; const s = document.createElement('span'); s.textContent = text; s.style.color = color; ui.banner.appendChild(s);
+  if (sub) { const sm = document.createElement('small'); sm.textContent = sub; ui.banner.appendChild(sm); }
+  ui.banner.classList.add('show'); clearTimeout(bannerTO); bannerTO = setTimeout(() => ui.banner.classList.remove('show'), 1700);
+}
+function callout(big, small, color) {
+  ui.banner.classList.remove('show');
+  ui.coBig.textContent = big; ui.coBig.style.color = color || ''; ui.coSmall.textContent = small || '';
+  ui.callout.classList.remove('show'); void ui.callout.offsetWidth; ui.callout.classList.add('show');
+  clearTimeout(calloutTO); calloutTO = setTimeout(() => ui.callout.classList.remove('show'), 2700);
+}
+function toast(msg) { ui.toast.textContent = msg; ui.toast.classList.add('show'); clearTimeout(toastTO); toastTO = setTimeout(() => ui.toast.classList.remove('show'), 2400); }
+function setFill(p) {
+  ui.fill.style.height = (p * 100).toFixed(1) + '%'; ui.fireSub.textContent = state.charging ? Math.round(p * 100) + '%' : 'hold';
+  ui.retPower.setAttribute('stroke-dasharray', `${(p * 100).toFixed(1)} 100`);
+  ui.reticle.classList.toggle('charging', state.charging);
+}
+
+/* ================= minimap ================= */
+const mapCtx = ui.map.getContext('2d');
+function sizeMap() {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), w = ui.map.clientWidth || 104, h = ui.map.clientHeight || 148;
+  if (ui.map.width !== Math.round(w * dpr) || ui.map.height !== Math.round(h * dpr)) { ui.map.width = Math.round(w * dpr); ui.map.height = Math.round(h * dpr); buildMapStatic(); }
+}
+function buildMapStatic() {
+  const M = world.M; if (!M) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2), cw = ui.map.width / dpr, ch = ui.map.height / dpr;
+  if (!cw || !ch) return;
+  let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+  for (const [x, z] of M.def.center) { x0 = Math.min(x0, x - M.E); x1 = Math.max(x1, x + M.E); z0 = Math.min(z0, z - 4); z1 = Math.max(z1, z + 4); }
+  const sc = Math.min((cw - 10) / (x1 - x0), (ch - 10) / (z1 - z0));
+  const ox = (cw - (x1 - x0) * sc) / 2, oy = (ch - (z1 - z0) * sc) / 2;
+  const cv = document.createElement('canvas'); cv.width = ui.map.width; cv.height = ui.map.height;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  const P = (x, z) => [(x - x0) * sc + ox, (z - z0) * sc + oy];
+  g.fillStyle = '#3a4a2b'; g.fillRect(0, 0, cw, ch);
+  const path = () => { g.beginPath(); M.def.center.forEach(([x, z], i) => { const [a, b] = P(x, z); i ? g.lineTo(a, b) : g.moveTo(a, b); }); };
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  path(); g.strokeStyle = '#4a9238'; g.lineWidth = 2 * M.E * sc; g.stroke();
+  path(); g.strokeStyle = '#6cbf4b'; g.lineWidth = 2 * M.def.fairW * sc; g.stroke();
+  const circ = (x, z, r, c) => { const [a, b] = P(x, z); g.beginPath(); g.arc(a, b, Math.max(1, r * sc), 0, Math.PI * 2); g.fillStyle = c; g.fill(); };
+  circ(M.cup.x, M.cup.z, M.def.greenR, '#93da6b');
+  for (const b of M.def.bunkers) circ(b[0], b[1], b[2], '#edd9a0');
+  for (const p of M.ponds) circ(p.x, p.z, p.r + 2, '#3aa0d8');
+  for (const t of M.trees) circ(t.x, t.z, 1.6, '#24572b');
+  g.fillStyle = '#8a6a3a';
+  for (const b of M.boxes) { const [a, c] = P(b.x0, b.z0); g.fillRect(a, c, Math.max(1.5, b.w * sc), Math.max(1.5, b.d * sc)); }
+  const [tx, tz] = P(M.tee.x, M.tee.z); g.fillStyle = '#ff6b17'; g.fillRect(tx - 3, tz - 1.5, 6, 3);
+  world.mapStatic = { cv, P, dpr, sc };
+}
+function drawMap() {
+  const st = world.mapStatic, M = world.M; if (!st || !M) return;
+  const g = mapCtx; g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, ui.map.width, ui.map.height); g.drawImage(st.cv, 0, 0);
+  g.setTransform(st.dpr, 0, 0, st.dpr, 0, 0);
+  const [fx, fz] = st.P(M.cup.x, M.cup.z);
+  g.strokeStyle = '#1b2214'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(fx, fz); g.lineTo(fx, fz - 11); g.stroke();
+  g.fillStyle = '#e8322b'; g.beginPath(); g.moveTo(fx, fz - 11); g.lineTo(fx + 8, fz - 8); g.lineTo(fx, fz - 5); g.closePath(); g.fill();
+  const cur = state.players[state.cur];
+  if ((state.phase === 'aim' || state.phase === 'pick') && cur) {
+    // Direction only: how far it goes is for the player to judge
+    const len = 400, [a, b] = st.P(cur.ball.x, cur.ball.z), [c, d] = st.P(cur.ball.x + Math.sin(state.yaw) * len, cur.ball.z + Math.cos(state.yaw) * len);
+    g.setLineDash([3, 3]); g.strokeStyle = '#f7f6ee'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(a, b); g.lineTo(c, d); g.stroke(); g.setLineDash([]);
+  }
+  state.players.forEach((p, i) => {
+    if (p.done) return;
+    const pos = p.char.group.position, [a, b] = st.P(pos.x, pos.z);
+    g.beginPath(); g.arc(a, b, i === state.cur ? 4.5 : 3.5, 0, Math.PI * 2); g.fillStyle = p.color; g.fill(); g.strokeStyle = '#1b2214'; g.lineWidth = 1.5; g.stroke();
+  });
+  if (state.shot) {
+    state.shot.projs.forEach((q, k) => {
+      if (q.gone || q.delay > 0 || (!q.active && state.phase !== 'choose')) return;
+      const [a, b] = st.P(q.b.x, q.b.z); g.beginPath(); g.arc(a, b, 2.5, 0, Math.PI * 2); g.fillStyle = '#ffffff'; g.fill();
+    });
+  }
+}
+
+/* ================= projectiles ================= */
+function makeProjectile(W) {
+  const g = new THREE.Group();
+  if (W.id === 'bazooka') {
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.9, 8), phong(0x5b7a2e)); body.rotation.x = Math.PI / 2; g.add(body);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.4, 8), phong(0xe8322b)); nose.rotation.x = Math.PI / 2; nose.position.z = 0.65; g.add(nose);
+    for (const r of [0, Math.PI / 2]) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.04, 0.25), phong(0x2d3a18)); fin.rotation.z = r; fin.position.z = -0.38; g.add(fin); }
+    g.scale.setScalar(1.6);
+  } else if (W.id === 'dart') {
+    const foam = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.36, 8), phong(0x3db8ff)); foam.rotation.x = Math.PI / 2; g.add(foam);
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.06, 0.09, 10), phong(0xff6b17)); tip.rotation.x = Math.PI / 2; tip.position.z = 0.22; g.add(tip);
+    g.scale.setScalar(2.2);
+  } else if (W.id === 'grenade') {
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), phong(0x556b2f)));
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(0.155, 0.155, 0.06, 10), phong(0xffd447)); band.rotation.x = Math.PI / 2; g.add(band);
+    g.scale.setScalar(1.8);
+  } else if (W.id === 'flare') {
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff3b5c })));
+    g.add(new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 8), new THREE.MeshBasicMaterial({ color: 0xff8a5c, transparent: true, opacity: 0.35, depthWrite: false })));
+    g.scale.setScalar(1.8);
+  } else if (W.id === 'shotgun') {
+    const slug = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.16, 8), phong(0x9aa3a8, { shininess: 60 })); slug.rotation.x = Math.PI / 2; g.add(slug);
+    g.scale.setScalar(2.4);
+  } else {
+    const brass = phong(0xd6a23a, { shininess: 60 }), long = W.id === 'sniper' ? 0.36 : W.id === 'auto' ? 0.26 : 0.2;
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, long, 8), brass); c.rotation.x = Math.PI / 2; g.add(c);
+    const n = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.14, 8), phong(0xb87333)); n.rotation.x = Math.PI / 2; n.position.z = long / 2 + 0.07; g.add(n);
+    g.scale.setScalar(2.4);
+  }
+  scene.add(g);
+  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.5, 16), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false }));
+  shadow.rotation.x = -Math.PI / 2; scene.add(shadow);
+  return { g, shadow };
+}
+function dropVis(q) { if (!q.vis) return; scene.remove(q.vis.g); scene.remove(q.vis.shadow); disposeTree(q.vis.g); disposeTree(q.vis.shadow); q.vis = null; }
+function removeShotVisuals() {
+  const s = state.shot; if (!s) return;
+  s.projs.forEach(q => { dropVis(q); if (q.marker) { scene.remove(q.marker); disposeTree(q.marker); q.marker = null; } });
+}
+function numberSprite(n, color) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const g = cv.getContext('2d');
+  g.beginPath(); g.moveTo(64, 124); g.lineTo(40, 88); g.arc(64, 58, 36, Math.PI * 0.78, Math.PI * 0.22); g.closePath(); g.fillStyle = '#1b2214'; g.fill();
+  g.beginPath(); g.arc(64, 58, 29, 0, Math.PI * 2); g.fillStyle = color; g.fill();
+  g.fillStyle = '#1b2214'; g.font = '44px "Lilita One","Arial Rounded MT Bold",sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(n), 64, 61);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true, fog: false }));
+  sp.scale.set(0.06, 0.06, 1); sp.center.set(0.5, 0); sp.renderOrder = 11;
+  return sp;
+}
+function updateProjectileVisual(dt) {
+  const s = state.shot; if (!s) return;
+  const M = world.M;
+  for (const q of s.projs) {
+    if (!q.vis) continue;
+    const b = q.b, g = q.vis.g;
+    if (q.sinking != null) {
+      q.sinking += dt; g.position.set(M.cup.x, M.cup.y + BALL_R - q.sinking * 1.2, M.cup.z);
+      if (q.sinking > 0.5) g.visible = false;
+      q.vis.shadow.visible = false; continue;
+    }
+    if (q.gone) { g.visible = false; q.vis.shadow.visible = false; continue; }
+    g.position.set(b.x, b.y, b.z);
+    const camDist = camera.position.distanceTo(g.position);
+    g.visible = q.delay <= 0 && camDist > 2.2; // never pop a projectile right into the first-person lens
+    q.vis.shadow.visible = q.delay <= 0;
+    const sp = Math.hypot(b.vx, b.vy, b.vz);
+    if (sp > 2) g.lookAt(b.x + b.vx, b.y + b.vy, b.z + b.vz);
+    const h = M.height(b.x, b.z), alt = b.y - h;
+    q.vis.shadow.position.set(b.x, h + 0.06, b.z);
+    q.vis.shadow.scale.setScalar(0.7 + Math.min(alt, 30) * 0.05);
+    q.vis.shadow.material.opacity = clamp(0.35 - alt * 0.008, 0.08, 0.35);
+    if (q.marker) q.marker.position.set(b.x, b.y + 1.4, b.z);
+    if (q.active && q.delay <= 0) {
+      q.trailT += dt;
+      while (q.trailT > 0.02) {
+        q.trailT -= 0.02;
+        if (sp < 3 || camDist < 4) continue;
+        q.trailN = (q.trailN || 0) + 1;
+        spawn({ x: b.x, y: b.y, z: b.z, size: 0.17, grow: -0.15, life: 0.55, color: s.color, opacity: 0.95 });
+        if (s.W.id === 'bazooka' && q.trailN % 2 === 0 && b.t < s.W.burn + 0.3) spawn({ x: b.x - b.vx * 0.03, y: b.y, z: b.z - b.vz * 0.03, vy: 0.5, size: 0.24, grow: 0.9, life: 0.75, color: 0xd9d6c8, opacity: 0.45, drag: 1 });
+        if (s.W.id === 'flare') {
+          spawn({ x: b.x, y: b.y, z: b.z, vy: 0.4, size: 0.3, grow: 1.1, life: 1.6, color: 0xffb3b3, opacity: 0.35, drag: 1 });
+          if (q.trailN % 2) spawn({ x: b.x, y: b.y, z: b.z, vx: (Math.random() - 0.5) * 2, vy: -1, vz: (Math.random() - 0.5) * 2, size: 0.08, life: 0.5, color: 0xffd447, grav: 0.4 });
+        }
+      }
+    }
+  }
+}
+
+/* ================= game flow ================= */
+function teeSpot() { const M = world.M; return { x: M.tee.x, y: M.tee.y, z: M.tee.z }; }
+function cap() { return HOLES[state.holeIdx].par + 5; }
+function golfTerm(strokes, par) {
+  if (strokes === 1) return 'HOLE IN ONE!';
+  const d = strokes - par;
+  const names = { '-3': 'ALBATROSS!', '-2': 'EAGLE!', '-1': 'BIRDIE!', '0': 'PAR', '1': 'BOGEY', '2': 'DOUBLE BOGEY', '3': 'TRIPLE BOGEY' };
+  return names[d] || (d < 0 ? 'INCREDIBLE!' : '+' + d);
+}
+function layoutChars(instant) {
+  const M = world.M, placed = [];
+  const order = state.players.map((_, i) => i).sort((a, b) => (a === state.cur ? -1 : b === state.cur ? 1 : a - b));
+  let doneN = 0;
+  for (const i of order) {
+    const p = state.players[i];
+    let tx, ty, tz;
+    if (p.done) {
+      const a = 2.2 + doneN++ * 1.1; tx = M.cup.x + Math.cos(a) * 3.4; tz = M.cup.z + Math.sin(a) * 3.4; ty = M.height(tx, tz);
+    } else {
+      tx = p.ball.x; tz = p.ball.z; ty = p.ball.y;
+      if (i !== state.cur) {
+        const dx = M.cup.x - tx, dz = M.cup.z - tz, L = Math.hypot(dx, dz) || 1, px = -dz / L, pz = dx / L, base = { x: tx, z: tz };
+        let k = 0;
+        while (placed.some(q => Math.hypot(q.x - tx, q.z - tz) < 2.6) && k < 10) { k++; const off = 2.8 * Math.ceil(k / 2) * (k % 2 ? 1 : -1); tx = base.x + px * off; tz = base.z + pz * off; }
+        if (k > 0) ty = M.height(tx, tz);
+      }
+      placed.push({ x: tx, z: tz });
+    }
+    setCharTarget(p.char, tx, ty, tz, instant);
+    p.char.ring.visible = false;
+  }
+}
+function newGame(names) {
+  for (const p of state.players) { scene.remove(p.char.group); disposeTree(p.char.group); }
+  state.players = names.map((n, i) => {
+    const st = STYLES[i];
+    return { name: n, color: st.color, style: st, ball: { x: 0, y: 0, z: 0 }, strokes: 0, done: false, scores: [], char: makeChar(st, n) };
+  });
+  state.shotsFired = 0;
+}
+function startHole(idx) {
+  timers.length = 0; state.waitFn = null;
+  removeShotVisuals(); state.shot = null; state.choice = null; if (ui.choose) ui.choose.hidden = true; clearParts();
+  state.holeIdx = idx; buildWorld(idx);
+  // Each hole gets its own base wind, a little stronger on every hole
+  const [lo, hi] = [[1, 3], [2.5, 4.5], [3, 6]][idx] || [2, 4];
+  world.wind = { baseDir: Math.random() * Math.PI * 2, baseSpeed: lo + Math.random() * (hi - lo) };
+  const ord = state.players.map((_, i) => i);
+  if (idx > 0) ord.sort((a, b) => (state.players[a].scores[idx - 1] - state.players[b].scores[idx - 1]) || a - b);
+  state.order = ord; state.turnPos = 0;
+  for (const p of state.players) { p.ball = teeSpot(); p.strokes = 0; p.done = false; p.char.inner.rotation.set(0, 0, 0); }
+  state.cur = ord[0];
+  layoutChars(true);
+  ui.setup.hidden = true; ui.board.hidden = true; ui.hud.hidden = false;
+  sizeMap(); buildMapStatic();
+  cam.arrived = false;
+  beginTurn(ord[0]);
+  const def = HOLES[idx];
+  later(0.1, () => showBanner(`Hole ${idx + 1}: ${def.name}`, `Par ${def.par} · ${Math.round(Math.hypot(world.M.cup.x - world.M.tee.x, world.M.cup.z - world.M.tee.z))} m · wind ${fmt1(world.M.wind.speed)} m/s`, '#f2eed6'));
+}
+function widx(id) { return WEAPONS.findIndex(w => w.id === id); }
+function autoWeapon(p) {
+  const M = world.M, d = distToCup(p), surf = M.surface(p.ball.x, p.ball.z);
+  if (surf === 'sand') return widx('flare');
+  if (surf === 'green' || d < WEAPONS[widx('dart')].range * 0.9) return widx('dart');
+  const lie = surf === 'rough' ? 0.85 : 1;
+  for (const id of ['pistol', 'shotgun', 'auto', 'sniper', 'grenade', 'bazooka']) { const W = WEAPONS[widx(id)]; if (W.range * lie * 0.92 >= d) return widx(id); }
+  return widx('bazooka');
+}
+// Power lost to a bad lie. The flare gun is built for bunkers and does not care.
+function lieFactor(W, surf) { if (W.sandProof) return 1; return surf === 'sand' ? 0.55 : surf === 'rough' ? 0.85 : 1; }
+function currentLie() { const p = state.players[state.cur]; return p ? world.M.surface(p.ball.x, p.ball.z) : 'fairway'; }
+// Wind changes a little every turn around the hole's base wind
+function rollWind() {
+  const w = world.wind; if (!w) return;
+  const dir = w.baseDir + (Math.random() - 0.5) * 0.5, sp = Math.max(0, w.baseSpeed + (Math.random() - 0.5) * 1.6);
+  world.M.wind = { x: Math.sin(dir) * sp, z: Math.cos(dir) * sp, dir, speed: sp };
+}
+function beginTurn(i) {
+  state.cur = i; state.phase = 'pick'; cam.arrived = false;
+  const p = state.players[i], M = world.M;
+  state.yaw = Math.atan2(M.cup.x - p.ball.x, M.cup.z - p.ball.z);
+  state.charging = false; state.power = 0; setFill(0);
+  rollWind();
+  layoutChars(false);
+  p.char.ring.visible = true;
+  vm.handMat.color.set(p.color);
+  setZoom(false); state.zoomF = 1.001;
+  updateHUD();
+  openPick(true);
+}
+function announceTurn() {
+  const p = state.players[state.cur]; if (!p || state.phase !== 'aim') return;
+  if (state.players.length > 1) showBanner(`${genitive(p.name)} turn`, `Stroke ${p.strokes + 1} · ${Math.round(distToCup(p))} m to go`, p.color);
+  else showBanner(`Stroke ${p.strokes + 1}`, `${Math.round(distToCup(p))} m to go`, p.color);
+}
+function startCharge() {
+  if (state.phase !== 'aim' || state.charging) return;
+  sfx.unlock(); state.charging = true; state.chargeT = 0; state.power = 0; ui.fire.classList.add('charging');
+}
+function releaseCharge() {
+  if (!state.charging) return;
+  state.charging = false; ui.fire.classList.remove('charging');
+  if (state.power < 0.04) { setFill(0); toast(mouseMode() ? 'Not enough power. Hold the button a little longer.' : 'Not enough power. Hold Fire a little longer.'); return; }
+  fire(state.power);
+}
+// Triangular random number in [-1, 1], most often near 0
+function tri() { return (Math.random() + Math.random()) - 1; }
+const BURST_PATTERN = [[0, 0, 0], [-1.3, 0.7, -0.05], [1.3, -0.5, 0.05]]; // yaw°, pitch°, power for the three assault-rifle bullets
+function fire(power) {
+  const pi = state.cur, p = state.players[pi], W = WEAPONS[state.weapon], M = world.M;
+  p.strokes++; state.shotsFired++;
+  state.phase = 'flight'; setControls(false); setFill(power); updateHUD();
+  ui.fireSub.textContent = Math.round(power * 100) + '%';
+  const lie = lieFactor(W, M.surface(p.ball.x, p.ball.z));
+  const spread = (10 - W.precision) * 0.3 * power; // degrees of random wobble at this power
+  const n = W.shots || 1, projs = [];
+  for (let k = 0; k < n; k++) {
+    const pat = n > 1 ? BURST_PATTERN[k] : [0, 0, 0];
+    const yaw = state.yaw + (tri() * spread + pat[0]) * Math.PI / 180;
+    const pitch = state.pitch + tri() * spread * 0.5 + pat[1];
+    const pw = clamp(power * lie * (1 + tri() * spread * 0.01 + pat[2]), 0.01, 1);
+    projs.push({ b: launchState(W, pw, yaw, pitch, p.ball), vis: makeProjectile(W), delay: k * 0.09, active: true, result: null, still: 0, trailT: 0, lastBounce: 0, sinking: null, gone: false });
+  }
+  state.shot = { W, shooter: pi, age: 0, acc: 0, hits: new Set(), exploded: false, active: true, color: p.color, projs, primary: 0 };
+  projs.forEach(q => { q.vis.g.visible = false; });
+  cam.hdir.set(Math.sin(state.yaw), 0, Math.cos(state.yaw));
+  p.char.recoil = W.id === 'bazooka' || W.id === 'shotgun' ? 1 : 0.6; p.char.ring.visible = false;
+  vm.recoil = { dart: 0.5, auto: 0.45, pistol: 0.6, flare: 0.7 }[W.id] || 1; setZoom(false);
+  sfx.shot(W.id);
+  const b = projs[0].b, sp = Math.hypot(b.vx, b.vy, b.vz) || 1, ux = b.vx / sp, uy = b.vy / sp, uz = b.vz / sp;
+  // Muzzle flash a little ahead of the eye so it does not fill the first-person view
+  const flash = W.id === 'dart' ? 0xf2eed6 : W.id === 'flare' ? 0xff3b5c : 0xffc04d;
+  for (let k = 0; k < 8; k++) spawn({ x: b.x + ux * 1.2, y: b.y + uy * 1.2, z: b.z + uz * 1.2, vx: ux * 3 + (Math.random() - 0.5) * 2, vy: uy * 3 + Math.random(), vz: uz * 3 + (Math.random() - 0.5) * 2, size: 0.12, grow: 0.8, life: 0.25, color: flash, opacity: 0.9, drag: 4 });
+  if (W.id === 'bazooka') { shake(0.5); for (let k = 0; k < 10; k++) spawn({ x: b.x - ux * 3, y: b.y, z: b.z - uz * 3, vx: -ux * 4 + (Math.random() - 0.5) * 3, vy: Math.random() * 2, vz: -uz * 4 + (Math.random() - 0.5) * 3, size: 0.5, grow: 2, life: 1.0, color: 0xd9d6c8, opacity: 0.7, drag: 2 }); }
+  if (W.id === 'shotgun') { shake(0.35); for (let k = 0; k < 14; k++) spawn({ x: b.x + ux * 1.5, y: b.y + uy * 1.5, z: b.z + uz * 1.5, vx: ux * 26 + (Math.random() - 0.5) * 7, vy: uy * 26 + (Math.random() - 0.5) * 5, vz: uz * 26 + (Math.random() - 0.5) * 7, size: 0.06, life: 0.7, color: 0x50574a, grav: 1 }); }
+}
+function simShotStep() {
+  const s = state.shot, W = s.W, M = world.M;
+  for (const q of s.projs) {
+    if (!q.active) continue;
+    if (q.delay > 0) { q.delay -= STEP; continue; }
+    const b = q.b;
+    const imp = stepBall(b, STEP, W, M, true);
+    if (imp > 0 || b.contact) {
+      if (W.explode && !s.exploded) explode(b.x, b.y, b.z, -1);
+      if (imp > 2.5 && T - q.lastBounce > 0.08) { q.lastBounce = T; sfx.bounce(imp); dirtPuff(b.x, b.y - BALL_R, b.z, imp, b.surf); }
+    }
+    if (b.justBurst) { b.justBurst = false; energyBurst(b.x, b.y, b.z); }
+    hitPlayers(q);
+    for (const pd of M.ponds) if (b.y - BALL_R * 0.5 < pd.level && Math.hypot(b.x - pd.x, b.z - pd.z) < pd.r + 6) { endProj(q, 'water'); break; }
+    if (!q.active) continue;
+    if (b.x < M.ext.x0 || b.x > M.ext.x1 || b.z < M.ext.z0 || b.z > M.ext.z1 || b.y < -60 || (b.contact && b.surf === 'oob')) { endProj(q, 'oob'); continue; }
+    const dc = Math.hypot(b.x - M.cup.x, b.z - M.cup.z);
+    if (dc < (W.cupR || CUP_R) && b.y - BALL_R < M.cup.y + 0.35 && Math.hypot(b.vx, b.vz) < (W.cupV || 7.5) && b.vy < 3) { endProj(q, 'cup'); continue; }
+    const sp = Math.hypot(b.vx, b.vy, b.vz);
+    if (b.contact && sp < 0.3) { q.still += STEP; if (q.still > 0.25) { endProj(q, 'rest'); continue; } } else q.still = 0;
+    if (b.t > 24) endProj(q, 'rest');
+  }
+  if (s.active && s.projs.every(q => !q.active)) { s.active = false; resolveShot(); }
+}
+function energyBurst(x, y, z) {
+  sfx.burst(); shake(0.3);
+  spawn({ x, y, z, size: 0.4, grow: 9, life: 0.35, color: 0x5ff5d2, opacity: 0.8 });
+  for (let k = 0; k < 16; k++) { const a = k / 16 * Math.PI * 2; spawn({ x, y: y + 0.2, z, vx: Math.cos(a) * 7, vy: 1.5, vz: Math.sin(a) * 7, size: 0.14, life: 0.6, color: k % 2 ? 0x5ff5d2 : 0xffffff, drag: 2 }); }
+}
+function hitPlayers(q) {
+  const s = state.shot, b = q.b;
+  state.players.forEach((p, i) => {
+    if (!q.active || i === s.shooter || s.hits.has(i) || p.done) return;
+    const c = p.char; if (c.mode === 'fly' || c.mode === 'poof') return;
+    const cp = c.group.position;
+    const head = Math.hypot(b.x - cp.x, b.y - (cp.y + 2.02 * CHAR_S), b.z - cp.z) < 0.52 * CHAR_S + BALL_R + 0.08;
+    const body = !head && Math.hypot(b.x - cp.x, b.z - cp.z) < 0.74 * CHAR_S + BALL_R && b.y > cp.y - 0.1 && b.y < cp.y + 1.62 * CHAR_S;
+    if (!head && !body) return;
+    s.hits.add(i);
+    for (let k = 0; k < 10; k++) { const a = Math.random() * Math.PI * 2; spawn({ x: cp.x, y: cp.y + 2.8 * CHAR_S, z: cp.z, vx: Math.cos(a) * 3, vy: 2 + Math.random() * 2, vz: Math.sin(a) * 3, size: 0.18, life: 0.9, color: 0xffd447, grav: 0.4 }); }
+    b.vx *= -0.12; b.vz *= -0.12; b.vy = Math.abs(b.vy) * 0.2 + 2.5;
+    if (s.W.explode && !s.exploded) explode(b.x, b.y, b.z, i);
+    knock(i, head ? 'head' : 'body', null);
+  });
+}
+function explode(x, y, z, directIdx) {
+  const s = state.shot; s.exploded = true;
+  sfx.boom(); shake(1.4);
+  spawn({ x, y, z, size: 0.6, grow: 22, life: 0.35, color: 0xffd447, opacity: 1 });
+  spawn({ x, y, z, size: 0.4, grow: 16, life: 0.5, color: 0xff6b17, opacity: 0.9 });
+  for (let k = 0; k < 12; k++) spawn({ x: x + (Math.random() - 0.5) * 3, y: y + Math.random() * 2, z: z + (Math.random() - 0.5) * 3, vy: 2 + Math.random() * 3, size: 1, grow: 2.5, life: 1.8, color: 0x7d7a6e, opacity: 0.7, drag: 1.2 });
+  for (let k = 0; k < 18; k++) { const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 8; spawn({ x, y: y + 0.3, z, vx: Math.cos(a) * sp, vy: 6 + Math.random() * 8, vz: Math.sin(a) * sp, size: 0.18 + Math.random() * 0.2, life: 1.4, color: 0x5a4628, grav: 1 }); }
+  state.players.forEach((p, i) => {
+    if (i === s.shooter || i === directIdx || s.hits.has(i) || p.done) return;
+    const c = p.char; if (c.mode === 'fly' || c.mode === 'poof') return;
+    const cp = c.group.position, d = Math.hypot(cp.x - x, cp.z - z);
+    if (d < BLAST_R && Math.abs(cp.y - y) < 6) { s.hits.add(i); knock(i, 'blast', { x, z, d }); }
+  });
+}
+function knock(i, mode, blast) {
+  const p = state.players[i], M = world.M, old = { x: p.ball.x, z: p.ball.z };
+  let target, big, small, color = p.color;
+  if (mode === 'head') {
+    target = teeSpot();
+    const moved = Math.hypot(target.x - old.x, target.z - old.z);
+    big = 'HEADSHOT!'; small = moved < 4 ? `${p.name} was already on the tee. Lucky.` : `${p.name} goes all the way back to the tee`;
+    state.timeScale = 0.22; state.slowT = 1.0; sfx.ding(); sfx.bonk();
+  } else if (mode === 'body') {
+    const pr = M.project(old.x, old.z), pt = M.pointAt(Math.max(M.sTee, pr.s - KNOCK), clamp(pr.lat, -(M.def.fairW - 2), M.def.fairW - 2));
+    target = validPos(M, pt.x, pt.z);
+    const moved = Math.round(Math.hypot(target.x - old.x, target.z - old.z));
+    big = 'HIT!'; small = moved < 4 ? `${p.name} was on the tee and got away with it` : `${p.name} flies ${moved} m back`;
+    state.timeScale = 0.45; state.slowT = 0.6; sfx.bonk();
+  } else {
+    const dx = old.x - blast.x, dz = old.z - blast.z, d = Math.max(0.5, Math.hypot(dx, dz)), push = 8 + 10 * (1 - d / BLAST_R);
+    target = validPos(M, old.x + dx / d * push, old.z + dz / d * push);
+    big = 'BOOM!'; small = `${p.name} got blown ${Math.round(Math.hypot(target.x - old.x, target.z - old.z))} m away`;
+  }
+  p.ball = { x: target.x, y: target.y, z: target.z };
+  const dist = Math.hypot(target.x - p.char.group.position.x, target.z - p.char.group.position.z);
+  launchFly(p.char, target, 0.9 + Math.min(dist, 220) / 90, 5 + Math.min(dist, 220) * 0.12);
+  callout(big, small, color);
+}
+// One projectile has finished. Effects happen now; scoring waits until every projectile is done.
+function endProj(q, type) {
+  q.active = false; q.result = type;
+  const b = q.b;
+  if (type === 'water') {
+    sfx.splash(); q.gone = true;
+    for (let k = 0; k < 24; k++) { const a = Math.random() * Math.PI * 2, sp = 1 + Math.random() * 3; spawn({ x: b.x, y: b.y, z: b.z, vx: Math.cos(a) * sp, vy: 4 + Math.random() * 6, vz: Math.sin(a) * sp, size: 0.2, life: 1, color: k % 2 ? 0xffffff : 0x9fdcff, grav: 1 }); }
+  } else if (type === 'oob') { sfx.miss(); q.gone = true; }
+  else if (type === 'cup') { q.sinking = 0; sfx.cup(); }
+}
+const SURF_NAME = { green: 'green', fairway: 'fairway', tee: 'tee', rough: 'rough', sand: 'bunker', crate: 'ammo crate', oob: 'out of bounds' };
+function resolveShot() {
+  const s = state.shot; state.phase = 'settle';
+  const cupQ = s.projs.find(q => q.result === 'cup');
+  if (cupQ) { finishShot('cup', cupQ); return; }
+  const rest = s.projs.filter(q => q.result === 'rest');
+  if (!rest.length) { finishShot(s.projs[0].result, s.projs[0]); return; }
+  if (rest.length === 1) { finishShot('rest', rest[0]); return; }
+  // Assault rifle: the player picks which bullet counts
+  state.phase = 'choose'; state.choice = rest; exitLock();
+  const M = world.M;
+  rest.forEach((q, k) => { q.marker = numberSprite(k + 1, s.color); q.marker.position.set(q.b.x, q.b.y + 1.4, q.b.z); scene.add(q.marker); });
+  ui.chooseRow.innerHTML = rest.map((q, k) => {
+    const d = Math.round(Math.hypot(q.b.x - M.cup.x, q.b.z - M.cup.z)), surf = SURF_NAME[M.surface(q.b.x, q.b.z)] || '';
+    return `<button type="button" class="cbtn" data-k="${k}"><b>${k + 1}</b><span>${d} m to go</span><small>${surf}</small></button>`;
+  }).join('');
+  ui.chooseRow.querySelectorAll('.cbtn').forEach(btn => btn.addEventListener('click', () => chooseBullet(+btn.dataset.k)));
+  ui.choose.hidden = false;
+  const best = ui.chooseRow.querySelector('.cbtn'); if (best) best.focus({ preventScroll: true });
+}
+function chooseBullet(k) {
+  if (state.phase !== 'choose' || !state.choice || !state.choice[k]) return;
+  const q = state.choice[k];
+  ui.choose.hidden = true;
+  state.shot.projs.forEach(o => { if (o.marker) { scene.remove(o.marker); disposeTree(o.marker); o.marker = null; } if (o !== q) o.gone = true; });
+  state.choice = null; state.phase = 'settle';
+  finishShot('rest', q);
+}
+function finishShot(type, q) {
+  const s = state.shot, p = state.players[s.shooter], b = q.b, M = world.M, def = HOLES[state.holeIdx];
+  s.projs.forEach(o => { if (o !== q) o.gone = true; });
+  s.primary = s.projs.indexOf(q);
+  let delay = 1.0;
+  if (type === 'rest') {
+    p.ball = { x: b.x, y: Math.max(M.height(b.x, b.z), b.y - BALL_R), z: b.z };
+    if (b.surf === 'sand' && !s.hits.size) toast('Straight into the bunker. The flare gun loses no power there.');
+  } else if (type === 'cup') {
+    p.done = true; delay = 1.8;
+    callout(golfTerm(p.strokes, def.par), `${p.name} holes out in ${p.strokes} ${p.strokes === 1 ? 'stroke' : 'strokes'}`, p.color);
+    for (let k = 0; k < 40; k++) { const a = Math.random() * Math.PI * 2, sp = 2 + Math.random() * 5; spawn({ x: M.cup.x, y: M.cup.y + 0.5, z: M.cup.z, vx: Math.cos(a) * sp, vy: 6 + Math.random() * 7, vz: Math.sin(a) * sp, size: 0.16, life: 1.8, color: [0xff5fa2, 0x3db8ff, 0xffcf3d, 0xb07cff, 0xff6b17][k % 5], grav: 0.5, drag: 0.8 }); }
+  } else if (type === 'water') {
+    p.strokes += 1;
+    callout('SPLASH!', `+1 stroke. ${p.name} shoots again from the same spot.`, '#3db8ff');
+  } else {
+    p.strokes += 1;
+    callout('OUT OF BOUNDS!', `+1 stroke. ${p.name} shoots again from the same spot.`, '#f2eed6');
+  }
+  if (!p.done && p.strokes >= cap()) {
+    p.done = true; p.strokes = cap(); p.picked = true;
+    later(delay, () => callout('PICKED UP', `Max ${cap()} strokes on this hole`, p.color));
+    delay += 1.6;
+  }
+  updateHUD();
+  later(delay, () => {
+    removeShotVisuals(); layoutChars(false);
+    state.waitFn = () => later(0.5, nextTurn);
+  });
+}
+function nextTurn() {
+  if (state.players.every(p => p.done)) { endHole(); return; }
+  const n = state.order.length;
+  for (let k = 1; k <= n; k++) {
+    const pos = (state.turnPos + k) % n, idx = state.order[pos];
+    if (!state.players[idx].done) { state.turnPos = pos; beginTurn(idx); return; }
+  }
+}
+function endHole() {
+  state.players.forEach(p => { p.scores[state.holeIdx] = p.strokes; });
+  state.phase = state.holeIdx >= HOLES.length - 1 ? 'end' : 'between';
+  setControls(false);
+  later(1.2, () => showBoard(state.phase === 'end' ? 'final' : 'hole'));
+}
+
+/* ================= scorecard ================= */
+function markCell(score, par) {
+  if (score == null) return '<span class="mk" aria-label="not played">·</span>';
+  const d = score - par, cls = d <= -2 ? 'u2' : d === -1 ? 'u1' : d === 1 ? 'o1' : d >= 2 ? 'o2' : '';
+  return `<span class="mk ${cls}">${score}</span>`;
+}
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function showBoard(kind) {
+  exitLock(); cancelCharge();
+  const parTot = HOLES.reduce((a, h) => a + h.par, 0);
+  const totals = state.players.map(p => p.scores.reduce((a, v) => a + (v || 0), 0));
+  const parPlayed = HOLES.reduce((a, h, i) => a + (state.players[0] && state.players[0].scores[i] != null ? h.par : 0), 0);
+  const best = Math.min(...totals);
+  let rows = '';
+  state.players.forEach((p, i) => {
+    const diff = totals[i] - parPlayed, lead = state.players.length > 1 && totals[i] === best && parPlayed > 0;
+    rows += `<tr class="${lead ? 'lead' : ''}"><th scope="row"><i class="chip" style="background:${p.color}"></i>${esc(p.name)}</th>` +
+      HOLES.map((h, k) => `<td>${markCell(p.scores[k], h.par)}</td>`).join('') +
+      `<td>${parPlayed ? totals[i] : '·'}</td><td>${parPlayed ? (diff > 0 ? '+' + diff : diff === 0 ? 'E' : diff) : '·'}</td></tr>`;
+  });
+  $('#scTable').innerHTML = `<thead><tr><th scope="col">Player</th>${HOLES.map((h, k) => `<th scope="col">${k + 1}</th>`).join('')}<th scope="col">Tot</th><th scope="col">±</th></tr>` +
+    `<tr class="par"><th scope="row">Par</th>${HOLES.map(h => `<td>${h.par}</td>`).join('')}<td>${parTot}</td><td></td></tr></thead><tbody>${rows}</tbody>`;
+  const acts = $('#scActions'); acts.innerHTML = '';
+  const btn = (txt, cls, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = txt; b.addEventListener('click', fn); acts.appendChild(b); return b; };
+  let focusBtn;
+  if (kind === 'final') {
+    const winners = state.players.filter((p, i) => totals[i] === best);
+    $('#scTitle').textContent = state.players.length === 1 ? `${totals[0]} strokes in total` : winners.length > 1 ? 'It’s a tie!' : `${winners[0].name} wins!`;
+    $('#scSub').textContent = state.players.length === 1 ? `The course is par ${parTot}. ${totals[0] - parTot <= 0 ? 'Nicely shot.' : 'Try to beat yourself next round.'}` : winners.length > 1 ? `${winners.map(w => w.name).join(' and ')} shared the win on ${best} strokes.` : `${best} strokes over three holes. The course is par ${parTot}.`;
+    focusBtn = btn('Play again', 'btn-primary', () => { state.players.forEach(p => { p.scores = []; }); startHole(0); });
+    btn('New players', 'btn-ghost', () => { state.players.forEach(p => { p.char.group.visible = false; }); ui.board.hidden = true; ui.hud.hidden = true; ui.setup.hidden = false; state.phase = 'setup'; });
+  } else if (kind === 'hole') {
+    const def = HOLES[state.holeIdx];
+    $('#scTitle').textContent = `Hole ${state.holeIdx + 1} done`;
+    $('#scSub').textContent = `${def.name}, par ${def.par}. The lowest score on this hole tees off first on the next.`;
+    focusBtn = btn(`To hole ${state.holeIdx + 2}`, 'btn-primary', () => startHole(state.holeIdx + 1));
+  } else {
+    $('#scTitle').textContent = 'Scorecard';
+    $('#scSub').textContent = `Hole ${state.holeIdx + 1} in progress. Only finished holes are counted.`;
+    focusBtn = btn('Back to the course', 'btn-primary', () => { ui.board.hidden = true; });
+  }
+  ui.board.hidden = false;
+  if (focusBtn) focusBtn.focus({ preventScroll: true });
+}
+
+/* ================= input ================= */
+let drag = null;
+// Held aim inputs: L/R turn, U/D change the angle. Each speeds up the longer it is held.
+const holds = new Map();
+function nudge(k) { if (k === 'L') state.yaw += 0.003 / state.zoomF; else if (k === 'R') state.yaw -= 0.003 / state.zoomF; else setPitch(state.pitch + (k === 'U' ? 0.2 : -0.2) / state.zoomF); }
+function holdStart(k, src) { if (state.phase !== 'aim' || holds.has(k)) return; holds.set(k, { t: 0, src }); nudge(k); }
+function holdEnd(k, src) { const h = holds.get(k); if (h && (!src || h.src === src)) holds.delete(k); }
+function applyHolds(dt) {
+  for (const [k, h] of holds) {
+    h.t += dt; const a = Math.min(1, h.t * 0.8);
+    if (k === 'L' || k === 'R') state.yaw += (k === 'L' ? 1 : -1) * (0.05 + a * 0.45) / state.zoomF * dt;
+    else setPitch(state.pitch + (k === 'U' ? 1 : -1) * (2 + a * 16) / state.zoomF * dt);
+  }
+}
+canvas.addEventListener('pointerdown', e => {
+  sfx.unlock();
+  if (state.phase !== 'aim') return;
+  if (mouseMode() && e.pointerType === 'mouse') {
+    // FPS style: first click locks the mouse; then left button charges and right button zooms
+    if (!state.locked) { requestLock(); return; }
+    if (e.button === 0) startCharge();
+    else if (e.button === 2) setZoom(true);
+    return;
+  }
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+});
+canvas.addEventListener('pointermove', e => {
+  if (!drag || drag.id !== e.pointerId || state.phase !== 'aim') return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag.x = e.clientX; drag.y = e.clientY;
+  // Look follows the finger: drag right to turn right, drag up to aim higher. Slower when zoomed.
+  const sens = (COARSE ? 0.0042 : 0.0032) / state.zoomF;
+  state.yaw -= dx * sens;
+  setPitch(state.pitch - dy * sens * 57.3 * 0.8);
+});
+const endDrag = e => { if (drag && drag.id === e.pointerId) drag = null; };
+canvas.addEventListener('pointerup', endDrag); canvas.addEventListener('pointercancel', endDrag);
+let wheelT = 0;
+canvas.addEventListener('wheel', e => {
+  if (state.phase !== 'aim') return;
+  e.preventDefault();
+  if (performance.now() - wheelT < 250 || Math.abs(e.deltaY) < 4) return;
+  wheelT = performance.now(); setZoom(e.deltaY < 0);
+}, { passive: false });
+['contextmenu'].forEach(ev => { canvas.addEventListener(ev, e => e.preventDefault()); ui.fire.addEventListener(ev, e => e.preventDefault()); });
+
+function bindAim(btn, k) {
+  btn.addEventListener('pointerdown', e => {
+    if (btn.disabled) return; e.preventDefault(); sfx.unlock();
+    holdStart(k, 'btn');
+    try { btn.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
+  const stop = () => holdEnd(k, 'btn');
+  btn.addEventListener('pointerup', stop); btn.addEventListener('pointercancel', stop); btn.addEventListener('lostpointercapture', stop);
+  btn.addEventListener('contextmenu', e => e.preventDefault());
+}
+bindAim(ui.left, 'L'); bindAim(ui.right, 'R'); bindAim(ui.up, 'U'); bindAim(ui.down, 'D');
+ui.zoom.addEventListener('click', () => { if (state.phase === 'aim') setZoom(!state.zoom); });
+ui.fire.addEventListener('pointerdown', e => { if (ui.fire.disabled) return; e.preventDefault(); startCharge(); });
+window.addEventListener('pointerup', e => {
+  if (e.button === 2 && mouseMode()) { if (state.zoom) setZoom(false); return; }
+  releaseCharge();
+});
+window.addEventListener('pointercancel', () => cancelCharge());
+ui.fire.addEventListener('keydown', e => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); startCharge(); } });
+ui.fire.addEventListener('keyup', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); releaseCharge(); } });
+const ARROWS = { ArrowLeft: 'L', ArrowRight: 'R', ArrowUp: 'U', ArrowDown: 'D' };
+window.addEventListener('keydown', e => {
+  if (ui.hud.hidden || !ui.board.hidden) return;
+  if (state.phase === 'choose' && /^[1-3]$/.test(e.key)) { chooseBullet(+e.key - 1); return; }
+  if (state.phase === 'pick') {
+    // Golf bag: number keys pick directly, arrows move the marker, Enter takes the marked weapon
+    const n = WEAPONS.length, cols = window.innerWidth <= 620 ? 2 : 4;
+    if (/^[1-9]$/.test(e.key) && +e.key <= n) { e.preventDefault(); confirmPick(+e.key - 1); }
+    else if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); confirmPick(state.weapon); }
+    else if (ARROWS[e.key]) {
+      e.preventDefault();
+      const d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -cols, ArrowDown: cols }[e.key];
+      const i = clamp(state.weapon + d, 0, n - 1); selectWeapon(i); wbtns[i].focus({ preventScroll: true });
+    }
+    return;
+  }
+  if ((e.key === 'q' || e.key === 'Q') && state.phase === 'aim') { e.preventDefault(); openPick(false); return; }
+  if (document.activeElement === ui.fire && (e.key === ' ' || e.key === 'Enter')) return;
+  if (e.key === ' ') { e.preventDefault(); if (!e.repeat) startCharge(); }
+  else if (ARROWS[e.key]) { e.preventDefault(); holdStart(ARROWS[e.key], 'key'); }
+  else if ((e.key === 'z' || e.key === 'Z') && !e.repeat && state.phase === 'aim') setZoom(!state.zoom);
+  else if (/^[1-9]$/.test(e.key) && state.phase === 'aim' && +e.key <= WEAPONS.length) selectWeapon(+e.key - 1);
+  else if (/^[1-3]$/.test(e.key) && state.phase === 'choose') chooseBullet(+e.key - 1);
+});
+window.addEventListener('keyup', e => {
+  if (e.key === ' ') { e.preventDefault(); releaseCharge(); }
+  if (ARROWS[e.key]) holdEnd(ARROWS[e.key], 'key');
+});
+window.addEventListener('blur', () => { holds.clear(); cancelCharge(); });
+ui.bagBtn.addEventListener('click', () => { if (state.phase === 'aim') openPick(false); });
+$('#holeCard').addEventListener('click', () => { if (['aim', 'pick', 'flight', 'settle'].includes(state.phase)) showBoard('peek'); });
+function setMuteLabel() { ui.mute.textContent = sfx.muted ? 'Sound off' : 'Sound on'; ui.mute.setAttribute('aria-pressed', sfx.muted ? 'true' : 'false'); }
+ui.mute.addEventListener('click', () => { sfx.setMuted(!sfx.muted); setMuteLabel(); });
+setMuteLabel();
+
+/* ================= setup screen ================= */
+const savedNames = store.get('birdieblasters-names') || [];
+function renderNames() {
+  const box = $('#names'), prev = [...box.querySelectorAll('input')].map(i => i.value);
+  box.innerHTML = '';
+  for (let i = 0; i < state.count; i++) {
+    const st = STYLES[i], row = document.createElement('div'); row.className = 'nrow';
+    const val = prev[i] != null ? prev[i] : (savedNames[i] || st.name);
+    row.innerHTML = `<i class="chip" style="background:${st.color}"></i><input id="name${i}" type="text" maxlength="16" autocomplete="off" aria-label="Name of player ${i + 1}"><span class="hat">${st.hatName}</span>`;
+    row.querySelector('input').value = val;
+    box.appendChild(row);
+  }
+}
+document.querySelectorAll('#countSeg button').forEach(b => b.addEventListener('click', () => {
+  state.count = +b.dataset.n;
+  document.querySelectorAll('#countSeg button').forEach(x => x.setAttribute('aria-checked', x === b ? 'true' : 'false'));
+  renderNames();
+}));
+const savedCount = store.get('birdieblasters-count');
+if (savedCount >= 1 && savedCount <= 4) { state.count = savedCount; document.querySelectorAll('#countSeg button').forEach(x => x.setAttribute('aria-checked', +x.dataset.n === savedCount ? 'true' : 'false')); }
+renderNames();
+$('#startBtn').addEventListener('click', async () => {
+  sfx.unlock();
+  const names = [...document.querySelectorAll('#names input')].map((inp, i) => (inp.value.trim() || STYLES[i].name).slice(0, 16));
+  store.set('birdieblasters-names', names); store.set('birdieblasters-count', state.count);
+  try { await Promise.race([document.fonts.load('64px "Lilita One"'), new Promise(r => setTimeout(r, 1200))]); } catch (e) { /* fallback font is fine */ }
+  newGame(names); startHole(0);
+});
+
+/* ================= main loop ================= */
+let last = performance.now(), mapTick = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = Math.min(0.05, (now - last) / 1000); last = now; T += dt;
+  if (state.slowT > 0) { state.slowT -= dt; if (state.slowT <= 0) state.timeScale = 1; }
+  const sdt = dt * state.timeScale;
+  for (let i = timers.length - 1; i >= 0; i--) { const tm = timers[i]; tm.t -= dt; if (tm.t <= 0) { timers.splice(i, 1); tm.fn(); } }
+  if (state.phase === 'aim') {
+    applyHolds(dt);
+    if (state.charging) { state.chargeT += dt; const x = (state.chargeT * 0.72) % 2; state.power = x < 1 ? x : 2 - x; setFill(state.power); }
+  } else if (holds.size) holds.clear();
+  const s = state.shot;
+  if (s) s.age += dt;
+  if (s && s.active) { s.acc += sdt; let n = 0; while (s.acc >= STEP && s.active && n < 240) { s.acc -= STEP; simShotStep(); n++; } }
+  updateProjectileVisual(sdt);
+  state.players.forEach(p => updateChar(p.char, sdt, p));
+  updateParts(sdt);
+  if (world.flag) {
+    // The flag points downwind and flutters harder in a strong wind
+    const w = world.M.wind, sp = w ? w.speed : 0, base = w && sp > 0.3 ? Math.atan2(-w.z, w.x) : 0;
+    world.flag.cloth.rotation.y = base + Math.sin(T * (2 + sp * 0.8)) * (0.35 - Math.min(sp, 6) * 0.04);
+    world.flag.cloth.scale.x = 1 + Math.sin(T * (5 + sp)) * 0.06;
+  }
+  for (const w of world.waters) w.mesh.position.y = w.base + Math.sin(T * 1.3) * 0.04;
+  for (const c of world.clouds) { c.position.x += c.userData.speed * dt; if (c.position.x > c.userData.x0 + 320) c.position.x = c.userData.x0 - 320; }
+  if (state.waitFn && charsSettled()) { const f = state.waitFn; state.waitFn = null; f(); }
+  updateCamera(dt);
+  const inGame = !ui.hud.hidden;
+  if (inGame) {
+    // Hide any figure whose head is right at the lens (you, in first person)
+    for (const p of state.players) { const g = p.char.group; tmpV.set(g.position.x, g.position.y + 2.2, g.position.z); g.visible = camera.position.distanceTo(tmpV) > 2.6; }
+  }
+  // Name tags and the flag marker keep their screen size when zoomed
+  const inv = 1 / state.zoomF;
+  for (const p of state.players) p.char.label.scale.set(0.15 * inv, 0.0375 * inv, 1);
+  if (world.flag) world.flag.marker.scale.set(0.05 * inv, 0.05 * inv, 1);
+  updateReticle();
+  if (inGame) { updateWindHUD(); updateLandMark(); updateLockUI(); }
+  if (inGame && (mapTick++ % 2 === 0)) drawMap();
+  if (state.phase === 'aim' && (mapTick % 6 === 0)) { const p = state.players[state.cur]; if (p) $('#hcDist').textContent = Math.round(distToCup(p)); }
+  renderer.clear();
+  renderer.render(scene, camera);
+  const vmOn = inGame && fpView() && state.zoomF < 1.6; // looking through the scope hides the weapon
+  updateViewmodel(dt, vmOn);
+  if (vmOn) { renderer.clearDepth(); renderer.render(vmScene, vmCamera); }
+}
+
+/* ================= boot ================= */
+function boot(data) {
+  buildWorld(0); resize();
+  cam.pos.set(120, 90, 60);
+  if (data && data.v === 1 && Array.isArray(data.names) && data.names.length && data.phase && data.phase !== 'setup') {
+    newGame(data.names.slice(0, 4));
+    state.players.forEach((p, i) => { p.scores = (data.scores && data.scores[i]) || []; });
+    if (data.phase === 'end') { state.holeIdx = HOLES.length - 1; state.phase = 'end'; ui.setup.hidden = true; showBoard('final'); }
+    else if (data.phase === 'between') { state.holeIdx = data.holeIdx; state.phase = 'between'; buildWorld(data.holeIdx); ui.setup.hidden = true; showBoard('hole'); }
+    else startHole(clamp(data.holeIdx || 0, 0, HOLES.length - 1));
+  }
+  requestAnimationFrame(t => { last = t; frame(t); });
+}
+const hot = window.claude && window.claude.hot;
+if (hot && typeof hot.snapshot === 'function') {
+  hot.snapshot(() => ({ v: 1, phase: state.phase, holeIdx: state.holeIdx, names: state.players.map(p => p.name), scores: state.players.map(p => p.scores) }));
+}
+if (hot && typeof hot.ready === 'function') hot.ready(boot); else boot((hot && hot.data) || {});
+})();
+</script>
+
+</body>
+</html>
