@@ -5,7 +5,10 @@ their shot lands, so the next player can shoot them back toward the tee.
 Built with Three.js and Vite.
 
 ## Commands
-- `npm install` once, then `npm run dev` and open http://localhost:5173
+- `npm install` once (it also installs the `server/` workspace), then
+  `npm run dev` and open http://localhost:5173
+- `npm run dev:server` runs the game server on ws://localhost:2567 and
+  restarts it when its files change
 - `npm run build` writes a static site to `dist/`; `npm run preview` serves it
 - `npm test` runs the tests. `tests/golden/shots.json` records how ~200 seeded
   shots play out; update it with `npx vitest run -u` only after an intended
@@ -15,7 +18,14 @@ Built with Three.js and Vite.
 - `src/core/`: physics, weapons, courses, rules, the shot simulator
   (`shot.js`) and the match rules (`match.js`: seats, turns, wind, strokes,
   holes, disconnects). No Three.js, DOM or `Math.random`; `tests/core.test.js`
-  checks.
+  checks. `protocol.js` is what browser and server agree on: raise
+  `PROTOCOL_VERSION` whenever messages or room state change in a way an older
+  client cannot handle; older clients are then told to reload.
+- `server/`: the Colyseus game server (an npm workspace with its own
+  dependencies). It imports `src/core/` directly. `GolfRoom.js` is the room;
+  `server/tests/` boots a real server and talks to it with the browser SDK.
+  Behind a proxy, set `CLIENT_IP_HEADER` to the header that carries the real
+  client IP (`Fly-Client-IP` on Fly.io), or the per-IP room limit can be dodged.
 - `src/game/`: plays the match on screen. The match decides each shot when it
   is fired; `shot.js` plays it back, and the players' ball, strokes, done and
   scores in `state.js` are display copies that catch up as it plays out.
