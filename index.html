@@ -79,19 +79,41 @@
 
   <div id="setup" class="screen">
     <div class="panel">
-      <p class="kicker">3 holes · 1–4 players · one screen</p>
+      <p class="kicker">3 holes · 1–4 players · one screen or online</p>
       <h1 class="logo">Birdie Blasters</h1>
       <p class="lede">The golf clubs have been swapped for guns. You stand where your shot lands, so the next player can shoot you back toward the tee.</p>
-      <div class="field">
-        <span class="label" id="countLabel">Players</span>
-        <div class="seg" id="countSeg" role="radiogroup" aria-labelledby="countLabel">
-          <button type="button" role="radio" data-n="1" aria-checked="false">1</button>
-          <button type="button" role="radio" data-n="2" aria-checked="true">2</button>
-          <button type="button" role="radio" data-n="3" aria-checked="false">3</button>
-          <button type="button" role="radio" data-n="4" aria-checked="false">4</button>
-        </div>
+      <div class="seg two" id="modeSeg" role="radiogroup" aria-label="How to play">
+        <button type="button" role="radio" data-mode="local" aria-checked="true">One screen</button>
+        <button type="button" role="radio" data-mode="online" aria-checked="false">Online</button>
       </div>
-      <div class="names" id="names"></div>
+      <div class="mode" id="localSetup">
+        <div class="field">
+          <span class="label" id="countLabel">Players</span>
+          <div class="seg" id="countSeg" role="radiogroup" aria-labelledby="countLabel">
+            <button type="button" role="radio" data-n="1" aria-checked="false">1</button>
+            <button type="button" role="radio" data-n="2" aria-checked="true">2</button>
+            <button type="button" role="radio" data-n="3" aria-checked="false">3</button>
+            <button type="button" role="radio" data-n="4" aria-checked="false">4</button>
+          </div>
+        </div>
+        <div class="names" id="names"></div>
+      </div>
+      <div class="mode" id="onlineSetup" hidden>
+        <div class="field">
+          <label class="label" for="onlineName">Your nickname</label>
+          <input id="onlineName" class="text" type="text" maxlength="16" autocomplete="nickname" spellcheck="false" placeholder="Your name">
+        </div>
+        <p class="invited" id="invited" hidden></p>
+        <button id="createBtn" class="btn-primary" type="button">Create a room</button>
+        <div class="field">
+          <label class="label" for="joinCode">Or join a friend’s room</label>
+          <div class="joinrow">
+            <input id="joinCode" class="text code" type="text" maxlength="7" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="Room code">
+            <button id="joinBtn" class="btn-line" type="button">Join</button>
+          </div>
+        </div>
+        <p class="err" id="onlineErr" role="alert" hidden></p>
+      </div>
       <ul class="rules">
         <li>The golf bag holds eight weapons, one for each club. The <b>bazooka</b> is your driver and the <b>dart blaster</b> is your putter. Every weapon has its own special effect.</li>
         <li>The wind changes from hole to hole, and sand and rough take power from your shot.</li>
@@ -101,6 +123,22 @@
       </ul>
       <p class="err" id="glErr" hidden>Your browser could not start 3D graphics (WebGL). Try another browser, or turn on hardware acceleration.</p>
       <button id="startBtn" class="btn-primary" type="button">To the first tee</button>
+    </div>
+  </div>
+
+  <div id="lobby" class="screen" hidden>
+    <div class="panel">
+      <p class="kicker">Private room</p>
+      <div class="roomcode"><span class="label">Room code</span><b id="lobbyCode"></b></div>
+      <button id="inviteBtn" class="btn-line" type="button">Copy invite link</button>
+      <input id="inviteLink" class="text" type="text" readonly hidden aria-label="Invite link">
+      <div class="field">
+        <span class="label" id="playersLabel">Players</span>
+        <ul class="players" id="lobbyPlayers" aria-labelledby="playersLabel"></ul>
+      </div>
+      <p class="status" id="lobbyStatus" aria-live="polite"></p>
+      <button id="lobbyStart" class="btn-primary" type="button">Start the game</button>
+      <button id="lobbyLeave" class="btn-line" type="button">Leave room</button>
     </div>
   </div>
 

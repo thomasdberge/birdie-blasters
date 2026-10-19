@@ -9,6 +9,10 @@ Built with Three.js and Vite.
   `npm run dev` and open http://localhost:5173
 - `npm run dev:server` runs the game server on ws://localhost:2567 and
   restarts it when its files change
+- Online on a phone over Wi-Fi: run `npm run dev:server` and
+  `npm run dev -- --host`, then open the Network address Vite prints. Unless
+  `VITE_SERVER_URL` is set, the client uses port 2567 on the host that served
+  the page.
 - `npm run build` writes a static site to `dist/`; `npm run preview` serves it
 - `npm test` runs the tests. `tests/golden/shots.json` records how ~200 seeded
   shots play out; update it with `npx vitest run -u` only after an intended
@@ -26,6 +30,10 @@ Built with Three.js and Vite.
   `server/tests/` boots a real server and talks to it with the browser SDK.
   Behind a proxy, set `CLIENT_IP_HEADER` to the header that carries the real
   client IP (`Fly-Client-IP` on Fly.io), or the per-IP room limit can be dodged.
+  Run it with `NODE_ENV=production` in production: the host then needs at least
+  2 players to start (in development the host may start alone).
+- `src/net/`: talking to the game server. The online menu and lobby screen are
+  in `src/ui/lobby.js`; the browser SDK only loads when someone goes online.
 - `src/game/`: plays the match on screen. The match decides each shot when it
   is fired; `shot.js` plays it back, and the players' ball, strokes, done and
   scores in `state.js` are display copies that catch up as it plays out.

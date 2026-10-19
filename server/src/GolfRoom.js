@@ -60,6 +60,8 @@ export class GolfRoom extends Room {
   async onCreate() {
     this.roomId = await freeCode();
     this.state.code = this.roomId;
+    // In development the host may start alone, which makes testing with one browser easy
+    this.state.minPlayers = process.env.NODE_ENV === 'production' ? 2 : 1;
     await this.setPrivate(true); // only found by its code
     this.onMessage('start', client => this.start(client));
   }
@@ -84,7 +86,7 @@ export class GolfRoom extends Room {
   }
 
   async start(client) {
-    if (this.state.phase !== 'lobby' || client.sessionId !== this.state.host) return;
+    if (this.state.phase !== 'lobby' || client.sessionId !== this.state.host || this.state.seats.length < this.state.minPlayers) return;
     this.state.phase = 'playing';
     await this.lock(); // nobody joins a game in progress
   }

@@ -15,5 +15,6 @@ export const GolfState = schema({
   phase: t.string().default('lobby'),
   code: t.string(),
   host: t.string(), // sessionId of the host
+  minPlayers: t.uint8().default(2), // players needed before the host can start
   seats: t.array(Seat)
 }, 'GolfState');

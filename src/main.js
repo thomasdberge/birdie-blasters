@@ -18,6 +18,7 @@ import { initBag } from './ui/bag.js';
 import { ui } from './ui/elements.js';
 import { setFill, updateWindHUD } from './ui/hud.js';
 import { initInput } from './ui/input.js';
+import { initLobby } from './ui/lobby.js';
 import { buildMapStatic, drawMap, sizeMap } from './ui/minimap.js';
 import { initPointerLock, updateLockUI } from './ui/pointerLock.js';
 import { updateReticle } from './ui/reticle.js';
@@ -73,12 +74,14 @@ function boot() {
 }
 
 if (!renderer) {
-  $('#glErr').hidden = false; $('#startBtn').disabled = true;
+  $('#glErr').hidden = false;
+  for (const id of ['#startBtn', '#createBtn', '#joinBtn']) $(id).disabled = true;
 } else {
   window.addEventListener('resize', resize);
   initBag();
   initPointerLock();
   initInput();
+  initLobby();
   initSetup();
   boot();
 }

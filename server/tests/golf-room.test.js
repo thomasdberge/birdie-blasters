@@ -93,6 +93,29 @@ describe('the lobby', () => {
     expect(await turnedDown(join(ann.roomId, 'Cy'))).toBeInstanceOf(Error);
   });
 
+  test('in development the host can start alone', async () => {
+    const ann = await create('Ann');
+    await until(ann, s => s.seats.length === 1);
+    expect(ann.state.minPlayers).toBe(1);
+    ann.send('start');
+    await until(ann, s => s.phase === 'playing');
+  });
+
+  test('in production the host needs at least one other player to start', async () => {
+    process.env.NODE_ENV = 'production';
+    let ann;
+    try { ann = await create('Ann'); } finally { process.env.NODE_ENV = 'test'; }
+    await until(ann, s => s.seats.length === 1);
+    expect(ann.state.minPlayers).toBe(2);
+    ann.send('start');
+    await new Promise(r => setTimeout(r, 150));
+    expect(ann.state.phase).toBe('lobby');
+    await join(ann.roomId, 'Ben');
+    await until(ann, s => s.seats.length === 2);
+    ann.send('start');
+    await until(ann, s => s.phase === 'playing');
+  });
+
   test('when the host leaves the lobby, the next player becomes host and the seat is freed', async () => {
     const ann = await create('Ann'), ben = await join(ann.roomId, 'Ben');
     await until(ben, s => s.seats.length === 2);
