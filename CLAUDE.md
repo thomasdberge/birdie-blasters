@@ -12,7 +12,8 @@ Built with Three.js and Vite.
   change to how shots play.
 
 ## Code layout
-- `src/core/`: physics, weapons, courses and rules. No Three.js or DOM imports.
+- `src/core/`: physics, weapons, courses, rules and the shot simulator
+  (`shot.js`). No Three.js, DOM or `Math.random`; `tests/core.test.js` checks.
 - `src/game/`: shared state (`state.js`) and the turn and shot flow.
 - `src/render/`: everything Three.js (scene, course, characters, camera, effects).
 - `src/ui/`: HUD, golf bag, reticle, minimap, scorecard, setup screen and input.

@@ -2,9 +2,10 @@
 
 import { CUP_R, HOLES, validPos } from '../core/courses.js';
 import { clamp } from '../core/math.js';
-import { BALL_R, launchState, STEP, stepBall } from '../core/physics.js';
+import { BALL_R, STEP, stepBall } from '../core/physics.js';
 import { BLAST_R, CHAR_S, golfTerm, KNOCK } from '../core/rules.js';
-import { BURST_PATTERN, lieFactor, WEAPONS } from '../core/weapons.js';
+import { launchShot } from '../core/shot.js';
+import { WEAPONS } from '../core/weapons.js';
 import { sfx } from '../audio/sfx.js';
 import { setZoom } from './aim.js';
 import { cap, clock, later, state, teeSpot, world } from './state.js';
@@ -31,23 +32,13 @@ export function releaseCharge() {
   if (state.power < 0.04) { setFill(0); toast(mouseMode() ? 'Not enough power. Hold the button a little longer.' : 'Not enough power. Hold Fire a little longer.'); return; }
   fire(state.power);
 }
-// Triangular random number in [-1, 1], most often near 0
-function tri() { return (Math.random() + Math.random()) - 1; }
 function fire(power) {
   const pi = state.cur, p = state.players[pi], W = WEAPONS[state.weapon], M = world.M;
   p.strokes++; state.shotsFired++;
   state.phase = 'flight'; setControls(false); setFill(power); updateHUD();
   ui.fireSub.textContent = Math.round(power * 100) + '%';
-  const lie = lieFactor(W, M.surface(p.ball.x, p.ball.z));
-  const spread = (10 - W.precision) * 0.3 * power; // degrees of random wobble at this power
-  const n = W.shots || 1, projs = [];
-  for (let k = 0; k < n; k++) {
-    const pat = n > 1 ? BURST_PATTERN[k] : [0, 0, 0];
-    const yaw = state.yaw + (tri() * spread + pat[0]) * Math.PI / 180;
-    const pitch = state.pitch + tri() * spread * 0.5 + pat[1];
-    const pw = clamp(power * lie * (1 + tri() * spread * 0.01 + pat[2]), 0.01, 1);
-    projs.push({ b: launchState(W, pw, yaw, pitch, p.ball), vis: makeProjectile(W), delay: k * 0.09, active: true, result: null, still: 0, trailT: 0, lastBounce: 0, sinking: null, gone: false });
-  }
+  const projs = launchShot(M, W, { yaw: state.yaw, pitch: state.pitch, power }, p.ball, Math.random)
+    .map((b, k) => ({ b, vis: makeProjectile(W), delay: k * 0.09, active: true, result: null, still: 0, trailT: 0, lastBounce: 0, sinking: null, gone: false }));
   state.shot = { W, shooter: pi, age: 0, acc: 0, hits: new Set(), exploded: false, active: true, color: p.color, projs, primary: 0 };
   projs.forEach(q => { q.vis.g.visible = false; });
   cam.hdir.set(Math.sin(state.yaw), 0, Math.cos(state.yaw));
@@ -61,6 +52,8 @@ function fire(power) {
   if (W.id === 'bazooka') { shake(0.5); for (let k = 0; k < 10; k++) spawn({ x: b.x - ux * 3, y: b.y, z: b.z - uz * 3, vx: -ux * 4 + (Math.random() - 0.5) * 3, vy: Math.random() * 2, vz: -uz * 4 + (Math.random() - 0.5) * 3, size: 0.5, grow: 2, life: 1.0, color: 0xd9d6c8, opacity: 0.7, drag: 2 }); }
   if (W.id === 'shotgun') { shake(0.35); for (let k = 0; k < 14; k++) spawn({ x: b.x + ux * 1.5, y: b.y + uy * 1.5, z: b.z + uz * 1.5, vx: ux * 26 + (Math.random() - 0.5) * 7, vy: uy * 26 + (Math.random() - 0.5) * 5, vz: uz * 26 + (Math.random() - 0.5) * 7, size: 0.06, life: 0.7, color: 0x50574a, grav: 1 }); }
 }
+// Runs the same rules as simulateShot in core/shot.js, one step at a time with effects. Both are checked
+// against tests/golden/shots.json; this copy goes once the game plays back simulated shots instead.
 export function simShotStep() {
   const s = state.shot, W = s.W, M = world.M;
   for (const q of s.projs) {
