@@ -1,7 +1,8 @@
 // Builds the 3D course for a hole: terrain, scenery, water, trees, crates, stakes and the flag.
 
 import * as THREE from 'three';
-import { CUP_R, HOLES, makeModel, PLATEAU } from '../core/courses.js';
+import { CUP_R, HOLES, PLATEAU } from '../core/courses.js';
+import { courseModel } from '../core/match.js';
 import { clamp, rng } from '../core/math.js';
 import { clock, world } from '../game/state.js';
 import { disposeTree, phong, scene } from './scene.js';
@@ -46,7 +47,8 @@ function terrainColor(M, x, y, z, out, r) {
 }
 export function buildWorld(idx) {
   if (world.group) { scene.remove(world.group); disposeTree(world.group); }
-  const def = HOLES[idx], M = makeModel(def), g = new THREE.Group();
+  // The match's course model, wrapped so the turn's wind can be set on it without changing the shared model
+  const def = HOLES[idx], M = Object.create(courseModel(idx)), g = new THREE.Group();
   world.M = M; world.group = g; world.waters = []; world.clouds = [];
   // terrain
   const ext = M.ext, W = ext.x1 - ext.x0, D = ext.z1 - ext.z0, cell = 2.5;

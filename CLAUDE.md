@@ -16,7 +16,9 @@ Built with Three.js and Vite.
   (`shot.js`) and the match rules (`match.js`: seats, turns, wind, strokes,
   holes, disconnects). No Three.js, DOM or `Math.random`; `tests/core.test.js`
   checks.
-- `src/game/`: shared state (`state.js`) and the turn and shot flow.
+- `src/game/`: plays the match on screen. The match decides each shot when it
+  is fired; `shot.js` plays it back, and the players' ball, strokes, done and
+  scores in `state.js` are display copies that catch up as it plays out.
 - `src/render/`: everything Three.js (scene, course, characters, camera, effects).
 - `src/ui/`: HUD, golf bag, reticle, minimap, scorecard, setup screen and input.
 - `src/audio/`: synthesised sound effects.

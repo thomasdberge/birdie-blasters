@@ -3,7 +3,7 @@
 import { $, store } from '../platform.js';
 import { sfx } from '../audio/sfx.js';
 import { state, STYLES } from '../game/state.js';
-import { newGame, startHole } from '../game/turns.js';
+import { newGame } from '../game/turns.js';
 
 const savedNames = store.get('birdieblasters-names') || [];
 function renderNames() {
@@ -31,6 +31,6 @@ export function initSetup() {
     const names = [...document.querySelectorAll('#names input')].map((inp, i) => (inp.value.trim() || STYLES[i].name).slice(0, 16));
     store.set('birdieblasters-names', names); store.set('birdieblasters-count', state.count);
     try { await Promise.race([document.fonts.load('64px "Lilita One"'), new Promise(r => setTimeout(r, 1200))]); } catch (e) { /* fallback font is fine */ }
-    newGame(names); startHole(0);
+    newGame(names);
   });
 }

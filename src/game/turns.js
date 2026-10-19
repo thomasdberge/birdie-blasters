@@ -1,9 +1,10 @@
-// Hole and turn flow: setting up a hole, choosing whose turn it is, and ending the hole.
+// Hole and turn flow on screen. The match decides whose turn it is and when a hole ends; this shows it.
 
 import { HOLES } from '../core/courses.js';
+import { makeMatch } from '../core/match.js';
 import { WEAPONS, widx } from '../core/weapons.js';
 import { setZoom } from './aim.js';
-import { distToCup, later, state, STYLES, teeSpot, timers, world } from './state.js';
+import { distToCup, game, later, state, STYLES, timers, world } from './state.js';
 import { cam } from '../render/camera.js';
 import { makeChar, setCharTarget } from '../render/characters.js';
 import { clearParts } from '../render/particles.js';
@@ -18,54 +19,51 @@ import { setControls, setFill, showBanner, updateHUD } from '../ui/hud.js';
 import { buildMapStatic, sizeMap } from '../ui/minimap.js';
 import { showBoard } from '../ui/scorecard.js';
 
+// The screen catches up with what the match says about a player
+export function showSeat(i) {
+  const s = game.match.state.seats[i];
+  Object.assign(state.players[i], { ball: { ...s.ball }, strokes: s.strokes, done: s.done, picked: s.picked, scores: s.scores.slice() });
+}
+// Characters go to where the match says each player stands
 export function layoutChars(instant) {
-  const M = world.M, placed = [];
-  const order = state.players.map((_, i) => i).sort((a, b) => (a === state.cur ? -1 : b === state.cur ? 1 : a - b));
-  let doneN = 0;
-  for (const i of order) {
-    const p = state.players[i];
-    let tx, ty, tz;
-    if (p.done) {
-      const a = 2.2 + doneN++ * 1.1; tx = M.cup.x + Math.cos(a) * 3.4; tz = M.cup.z + Math.sin(a) * 3.4; ty = M.height(tx, tz);
-    } else {
-      tx = p.ball.x; tz = p.ball.z; ty = p.ball.y;
-      if (i !== state.cur) {
-        const dx = M.cup.x - tx, dz = M.cup.z - tz, L = Math.hypot(dx, dz) || 1, px = -dz / L, pz = dx / L, base = { x: tx, z: tz };
-        let k = 0;
-        while (placed.some(q => Math.hypot(q.x - tx, q.z - tz) < 2.6) && k < 10) { k++; const off = 2.8 * Math.ceil(k / 2) * (k % 2 ? 1 : -1); tx = base.x + px * off; tz = base.z + pz * off; }
-        if (k > 0) ty = M.height(tx, tz);
-      }
-      placed.push({ x: tx, z: tz });
-    }
-    setCharTarget(p.char, tx, ty, tz, instant);
+  const seats = game.match.state.seats;
+  state.players.forEach((p, i) => {
+    const s = seats[i].stand;
+    if (s) setCharTarget(p.char, s.x, s.y, s.z, instant);
     p.char.ring.visible = false;
-  }
+  });
 }
 export function newGame(names) {
   for (const p of state.players) { scene.remove(p.char.group); disposeTree(p.char.group); }
   state.players = names.map((n, i) => {
     const st = STYLES[i];
-    return { name: n, color: st.color, style: st, ball: { x: 0, y: 0, z: 0 }, strokes: 0, done: false, scores: [], char: makeChar(st, n) };
+    return { name: n, color: st.color, style: st, ball: null, strokes: 0, done: false, picked: false, scores: [], char: makeChar(st, n) };
   });
   state.shotsFired = 0;
+  game.match = makeMatch(names, Math.random);
+  showHole();
 }
-export function startHole(idx) {
+export function playAgain() {
+  game.match = makeMatch(state.players.map(p => p.name), Math.random);
+  showHole();
+}
+export function nextHole() {
+  game.match.nextHole();
+  showHole();
+}
+// Shows the hole the match is on: builds the course, puts everyone on the tee and shows the first turn
+function showHole() {
+  const idx = game.match.state.hole;
   timers.length = 0; state.waitFn = null;
   removeShotVisuals(); state.shot = null; state.choice = null; if (ui.choose) ui.choose.hidden = true; clearParts();
   state.holeIdx = idx; buildWorld(idx); buildMapStatic();
-  // Each hole gets its own base wind, a little stronger on every hole
-  const [lo, hi] = [[1, 3], [2.5, 4.5], [3, 6]][idx] || [2, 4];
-  world.wind = { baseDir: Math.random() * Math.PI * 2, baseSpeed: lo + Math.random() * (hi - lo) };
-  const ord = state.players.map((_, i) => i);
-  if (idx > 0) ord.sort((a, b) => (state.players[a].scores[idx - 1] - state.players[b].scores[idx - 1]) || a - b);
-  state.order = ord; state.turnPos = 0;
-  for (const p of state.players) { p.ball = teeSpot(); p.strokes = 0; p.done = false; p.char.inner.rotation.set(0, 0, 0); }
-  state.cur = ord[0];
+  state.players.forEach((p, i) => { showSeat(i); p.char.inner.rotation.set(0, 0, 0); });
+  state.cur = game.match.state.cur;
   layoutChars(true);
   ui.setup.hidden = true; ui.board.hidden = true; ui.hud.hidden = false;
   sizeMap(); buildMapStatic();
   cam.arrived = false;
-  beginTurn(ord[0]);
+  beginTurn();
   const def = HOLES[idx];
   later(0.1, () => showBanner(`Hole ${idx + 1}: ${def.name}`, `Par ${def.par} · ${Math.round(Math.hypot(world.M.cup.x - world.M.tee.x, world.M.cup.z - world.M.tee.z))} m · wind ${fmt1(world.M.wind.speed)} m/s`, '#f2eed6'));
 }
@@ -77,18 +75,15 @@ export function autoWeapon(p) {
   for (const id of ['pistol', 'shotgun', 'auto', 'sniper', 'grenade', 'bazooka']) { const W = WEAPONS[widx(id)]; if (W.range * lie * 0.92 >= d) return widx(id); }
   return widx('bazooka');
 }
-// Wind changes a little every turn around the hole's base wind
-function rollWind() {
-  const w = world.wind; if (!w) return;
-  const dir = w.baseDir + (Math.random() - 0.5) * 0.5, sp = Math.max(0, w.baseSpeed + (Math.random() - 0.5) * 1.6);
-  world.M.wind = { x: Math.sin(dir) * sp, z: Math.cos(dir) * sp, dir, speed: sp };
-}
-function beginTurn(i) {
+// Shows the turn the match has started, with this turn's wind
+function beginTurn() {
+  const ms = game.match.state, i = ms.cur;
   state.cur = i; state.phase = 'pick'; cam.arrived = false;
+  state.players.forEach((_, k) => showSeat(k));
   const p = state.players[i], M = world.M;
   state.yaw = Math.atan2(M.cup.x - p.ball.x, M.cup.z - p.ball.z);
   state.charging = false; state.power = 0; setFill(0);
-  rollWind();
+  M.wind = { ...ms.wind };
   layoutChars(false);
   p.char.ring.visible = true;
   vm.handMat.color.set(p.color);
@@ -96,17 +91,15 @@ function beginTurn(i) {
   updateHUD();
   openPick(true);
 }
+// Everyone has watched the shot land: the match starts the next turn or ends the hole
 export function nextTurn() {
-  if (state.players.every(p => p.done)) { endHole(); return; }
-  const n = state.order.length;
-  for (let k = 1; k <= n; k++) {
-    const pos = (state.turnPos + k) % n, idx = state.order[pos];
-    if (!state.players[idx].done) { state.turnPos = pos; beginTurn(idx); return; }
-  }
+  game.match.next();
+  if (game.match.state.phase === 'turn') beginTurn();
+  else endHole();
 }
 function endHole() {
-  state.players.forEach(p => { p.scores[state.holeIdx] = p.strokes; });
-  state.phase = state.holeIdx >= HOLES.length - 1 ? 'end' : 'between';
+  state.players.forEach((_, i) => showSeat(i));
+  state.phase = game.match.state.phase; // 'between' or 'end'
   setControls(false);
   later(1.2, () => showBoard(state.phase === 'end' ? 'final' : 'hole'));
 }

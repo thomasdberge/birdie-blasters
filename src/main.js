@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { STEP } from './core/physics.js';
 import { $ } from './platform.js';
 import { applyHolds, holds } from './game/aim.js';
-import { simShotStep } from './game/shot.js';
+import { playShotStep } from './game/shot.js';
 import { clock, distToCup, state, timers, world } from './game/state.js';
 import { cam, fpView, updateCamera } from './render/camera.js';
 import { charsSettled, updateChar } from './render/characters.js';
@@ -39,7 +39,7 @@ function frame(now) {
   } else if (holds.size) holds.clear();
   const s = state.shot;
   if (s) s.age += dt;
-  if (s && s.active) { s.acc += sdt; let n = 0; while (s.acc >= STEP && s.active && n < 240) { s.acc -= STEP; simShotStep(); n++; } }
+  if (s && s.active) { s.acc += sdt; let n = 0; while (s.acc >= STEP && s.active && n < 240) { s.acc -= STEP; playShotStep(); n++; } }
   updateProjectileVisual(sdt);
   state.players.forEach(p => updateChar(p.char, sdt, p));
   updateParts(sdt);

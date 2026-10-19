@@ -1,53 +1,12 @@
-// Golden shots: records what today's shot code (src/game/shot.js) does for about 200 seeded set-ups, so the
-// pure shot simulator that replaces it can be checked against tests/golden/shots.json.
+// Golden shots: tests/golden/shots.json records how about 200 seeded set-ups played out in the original game code.
+// The same set-ups now play through the match (src/core/match.js), which must reproduce the file byte for byte.
 // After an intended change to how shots play, regenerate with: npx vitest run -u
-import { expect, test, vi } from 'vitest';
-import { HOLES, makeModel, validPos } from '../src/core/courses.js';
+import { expect, test } from 'vitest';
+import { HOLES, validPos } from '../src/core/courses.js';
 import { rng } from '../src/core/math.js';
+import { courseModel, makeMatch } from '../src/core/match.js';
 import { WEAPONS } from '../src/core/weapons.js';
-import { chooseBullet, releaseCharge, simShotStep, startCharge } from '../src/game/shot.js';
-import { state, timers, world } from '../src/game/state.js';
 
-// Everything the shot code uses outside core/ and game/state.js is stubbed. Some stubs log what happened,
-// tagged with the simulation step it happened in.
-const rec = vi.hoisted(() => ({ step: -1, events: [], shot: null }));
-vi.mock('../src/audio/sfx.js', () => {
-  // Only the bazooka explodes and only the grenade bursts; both fire a single projectile
-  const at = () => { const b = rec.shot.projs[0].b; return { x: b.x, y: b.y, z: b.z }; };
-  return {
-    sfx: new Proxy({}, {
-      get: (_, name) => () => {
-        if (name === 'boom') rec.events.push({ e: 'explode', step: rec.step, at: at() });
-        else if (name === 'burst') rec.events.push({ e: 'burst', step: rec.step, at: at() });
-      }
-    })
-  };
-});
-vi.mock('../src/render/characters.js', () => ({
-  launchFly: (c, to) => { c.mode = 'fly'; rec.events.push({ e: 'knock', step: rec.step, player: c.idx, to: { x: to.x, y: to.y, z: to.z } }); }
-}));
-vi.mock('../src/ui/hud.js', () => {
-  // knock() announces the kind of hit right after launching the player
-  const KIND = { 'HEADSHOT!': 'head', 'HIT!': 'body', 'BOOM!': 'blast' };
-  return {
-    callout: big => { if (KIND[big]) rec.events[rec.events.length - 1].kind = KIND[big]; },
-    setControls() {}, setFill() {}, toast() {}, updateHUD() {}
-  };
-});
-vi.mock('../src/ui/elements.js', () => {
-  const el = () => ({ textContent: '', hidden: false, innerHTML: '', style: {}, classList: { add() {}, remove() {}, toggle() {} }, querySelector: () => null, querySelectorAll: () => [], setAttribute() {} });
-  return { ui: new Proxy({}, { get: (t, k) => (t[k] ??= el()) }) };
-});
-vi.mock('../src/render/camera.js', () => ({ cam: { hdir: { set() {} } }, shake() {} }));
-vi.mock('../src/render/particles.js', () => ({ dirtPuff() {}, spawn() {} }));
-vi.mock('../src/render/projectiles.js', () => ({ makeProjectile: () => ({ g: {}, shadow: {} }), numberSprite: () => ({ position: { set() {} } }), removeShotVisuals() {} }));
-vi.mock('../src/render/scene.js', () => ({ disposeTree() {}, scene: { add() {}, remove() {} } }));
-vi.mock('../src/render/viewmodel.js', () => ({ vm: {} }));
-vi.mock('../src/ui/pointerLock.js', () => ({ exitLock() {}, mouseMode: () => false }));
-vi.mock('../src/game/aim.js', () => ({ setZoom() {} }));
-vi.mock('../src/game/turns.js', () => ({ layoutChars() {}, nextTurn() {} }));
-
-const models = HOLES.map(makeModel);
 const LAUNCH_KEYS = ['x', 'y', 'z', 'vx', 'vy', 'vz', 'dirx', 'dirz'];
 const FINAL_KEYS = ['x', 'y', 'z', 'vx', 'vy', 'vz', 't', 'contact', 'surf', 'impactT', 'burstDone'];
 const pick = (o, keys) => Object.fromEntries(keys.map(k => [k, o[k]]));
@@ -58,7 +17,7 @@ function scenarios(count) {
   const between = (a, b) => a + R() * (b - a);
   const onCourse = M => { const p = M.pointAt(between(M.sTee, M.total), between(-(M.E - 4), M.E - 4)); return validPos(M, p.x, p.z); };
   for (let id = 0; id < count; id++) {
-    const hole = id % 3, M = models[hole], def = HOLES[hole];
+    const hole = id % 3, M = courseModel(hole), def = HOLES[hole];
     const n = 2 + Math.floor(R() * 3), shooter = Math.floor(R() * n);
     const u = R();
     let from;
@@ -85,44 +44,30 @@ function scenarios(count) {
   return list;
 }
 
-// Plays one set-up through the real shot code, the same way the Fire button does, and records the outcome
+// Puts a match in the set-up's situation and plays the shot. Everyone stands on their ball, as in the recording.
 function runShot(sc) {
-  const M = models[sc.hole];
-  world.M = M;
-  M.wind = { x: Math.sin(sc.wind.dir) * sc.wind.speed, z: Math.cos(sc.wind.dir) * sc.wind.speed, dir: sc.wind.dir, speed: sc.wind.speed };
-  state.holeIdx = sc.hole;
-  state.players = sc.players.map((pl, i) => ({
-    name: 'P' + (i + 1), color: '#ffffff', ball: { ...pl.pos }, strokes: i === sc.shooter ? sc.strokes : 0, done: pl.done, scores: [],
-    char: { idx: i, group: { position: { ...pl.pos } }, mode: 'idle', ring: {}, recoil: 0 }
-  }));
-  Object.assign(state, { cur: sc.shooter, weapon: sc.weapon, yaw: sc.yaw, pitch: sc.pitch, phase: 'aim', charging: false, shot: null, choice: null });
-  rec.events = []; rec.step = -1;
-  const random = vi.spyOn(Math, 'random').mockImplementation(rng(sc.seed));
-  startCharge(); state.power = sc.power; releaseCharge();
-  const s = state.shot;
-  rec.shot = s;
-  const launches = s.projs.map(q => pick(q.b, LAUNCH_KEYS));
-  const ends = [];
-  for (let step = 0; s.active; step++) {
-    if (step > 20000) throw new Error(`shot ${sc.id} did not finish`);
-    rec.step = step; simShotStep();
-    s.projs.forEach((q, k) => { if (!q.active && ends[k] == null) ends[k] = step; });
+  let random = rng(1);
+  const match = makeMatch(sc.players.map((_, i) => 'P' + (i + 1)), () => random()), st = match.state;
+  const wind = { x: Math.sin(sc.wind.dir) * sc.wind.speed, z: Math.cos(sc.wind.dir) * sc.wind.speed, dir: sc.wind.dir, speed: sc.wind.speed };
+  Object.assign(st, { hole: sc.hole, wind, cur: sc.shooter, phase: 'turn' });
+  sc.players.forEach((pl, i) => Object.assign(st.seats[i], { ball: { ...pl.pos }, stand: { ...pl.pos }, strokes: i === sc.shooter ? sc.strokes : 0, done: pl.done }));
+  random = rng(sc.seed); // the spread draws from the shot's seed, as Math.random did in the recording
+  const { shot } = match.shoot(sc.shooter, { weapon: sc.weapon, yaw: sc.yaw, pitch: sc.pitch, power: sc.power });
+  let choice = null, primary = shot.outcome.proj;
+  if (st.phase === 'choose') {
+    const candidates = st.choice.candidates.map(c => c.proj);
+    primary = match.chooseBullet(sc.shooter, sc.choose % candidates.length).proj;
+    choice = { candidates, picked: primary };
   }
-  let choice = null;
-  if (state.phase === 'choose') {
-    const candidates = state.choice.map(q => s.projs.indexOf(q)), k = sc.choose % candidates.length;
-    chooseBullet(k);
-    choice = { candidates, picked: candidates[k] };
-  }
-  random.mockRestore();
-  timers.length = 0;
+  const events = shot.events.filter(e => e.type === 'explode' || e.type === 'burst' || e.type === 'hit')
+    .map(e => e.type === 'hit' ? { e: 'knock', step: e.step, player: e.player, to: e.to, kind: e.kind } : { e: e.type, step: e.step, at: e.at });
   return {
     id: sc.id, hole: sc.hole, weapon: WEAPONS[sc.weapon].id, shooter: sc.shooter, seed: sc.seed,
-    aim: { yaw: sc.yaw, pitch: sc.pitch, power: sc.power }, wind: { x: M.wind.x, z: M.wind.z }, strokesBefore: sc.strokes,
-    players: sc.players, launches,
-    projs: s.projs.map((q, k) => ({ result: q.result, endStep: ends[k], final: pick(q.b, FINAL_KEYS) })),
-    events: rec.events, choice, primary: s.primary,
-    after: state.players.map(p => ({ ball: p.ball, strokes: p.strokes, done: p.done, picked: !!p.picked }))
+    aim: { yaw: sc.yaw, pitch: sc.pitch, power: sc.power }, wind: { x: wind.x, z: wind.z }, strokesBefore: sc.strokes,
+    players: sc.players, launches: shot.projs.map(q => pick(q.launch, LAUNCH_KEYS)),
+    projs: shot.projs.map(q => ({ result: q.result, endStep: q.endStep, final: pick(q.final, FINAL_KEYS) })),
+    events, choice, primary,
+    after: st.seats.map(s => ({ ball: s.ball, strokes: s.strokes, done: s.done, picked: s.picked }))
   };
 }
 
@@ -130,7 +75,8 @@ function runShot(sc) {
 function targeted(firstId) {
   const list = [], calm = { dir: 0, speed: 0 }, dart = WEAPONS.findIndex(w => w.id === 'dart'), bazooka = WEAPONS.findIndex(w => w.id === 'bazooka');
   let id = firstId;
-  models.forEach((M, hole) => {
+  HOLES.forEach((def, hole) => {
+    const M = courseModel(hole);
     // Cup: a dart pointed 60° down from 1.5 m away aims straight at the hole (eye height 2.6 m), and darts have no spread
     const back = Math.atan2(M.tee.x - M.cup.x, M.tee.z - M.cup.z), d = 2.6 / Math.tan(Math.PI / 3);
     const near = { x: M.cup.x + Math.sin(back) * d, z: M.cup.z + Math.cos(back) * d };
@@ -151,7 +97,7 @@ function targeted(firstId) {
 const setups = scenarios(200);
 const shots = setups.concat(targeted(setups.length)).map(runShot);
 
-test('shot outcomes match the golden file', async () => {
+test('the match plays every golden shot exactly as the original game did', async () => {
   // one shot per line keeps diffs readable
   await expect('[\n' + shots.map(s => JSON.stringify(s)).join(',\n') + '\n]\n').toMatchFileSnapshot('./golden/shots.json');
 });

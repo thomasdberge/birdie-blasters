@@ -39,23 +39,23 @@ function hitKind(b, s) {
 
 // Where a hit sends a player: a headshot back to the tee, a body hit KNOCK metres back down the course, a blast away from the explosion
 function knockTarget(M, kind, ball, blast) {
-  if (kind === 'head') return { x: M.tee.x, y: M.tee.y, z: M.tee.z };
+  if (kind === 'head') return at(M.tee);
   if (kind === 'body') {
     const pr = M.project(ball.x, ball.z), pt = M.pointAt(Math.max(M.sTee, pr.s - KNOCK), clamp(pr.lat, -(M.def.fairW - 2), M.def.fairW - 2));
-    return validPos(M, pt.x, pt.z);
+    return at(validPos(M, pt.x, pt.z));
   }
   const dx = ball.x - blast.x, dz = ball.z - blast.z, d = Math.max(0.5, Math.hypot(dx, dz)), push = 8 + 10 * (1 - d / BLAST_R);
-  return validPos(M, ball.x + dx / d * push, ball.z + dz / d * push);
+  return at(validPos(M, ball.x + dx / d * push, ball.z + dz / d * push));
 }
 
-const at = b => ({ x: b.x, y: b.y, z: b.z });
+function at(b) { return { x: b.x, y: b.y, z: b.z }; }
 
 // Runs a shot until every projectile has stopped. Inputs are not changed.
 //   M: course model · W: weapon · wind: { x, z } in m/s · launches: from launchShot
 //   players: who can be hit (not the shooter, not finished), in seat order, as { id, stand, ball }.
 //     Hits are checked where a player stands; a knock-back starts from their ball.
 // Returns { steps, projs, events, outcome }. Steps are simulation steps of STEP seconds counted from the trigger pull.
-//   projs[k]: { startStep, endStep, result, path, final, rest }. path holds x, y, z at SAMPLE_HZ from time 0 while
+//   projs[k]: { launch, startStep, endStep, result, path, final, rest }. path holds x, y, z at SAMPLE_HZ from time 0 while
 //     the projectile is in play (a delayed rifle bullet waits at its launch point); rest is where the ball lies after 'rest'.
 //   events, in order: bounce (imp > 2.5) · burst · explode · hit (kind 'head' | 'body' | 'blast', to) · end (result).
 //   outcome: { type: 'cup' | 'rest' | 'water' | 'oob', proj } or { type: 'choose', candidates } when several rifle bullets stop.
@@ -125,6 +125,6 @@ export function simulateShot({ M, W, wind, launches, players }) {
     : { type: 'choose', candidates: rest };
   return {
     steps: step, events, outcome,
-    projs: projs.map(q => ({ startStep: q.startStep, endStep: q.endStep, result: q.result, path: q.path, final: q.b, rest: q.rest }))
+    projs: projs.map((q, k) => ({ launch: { ...launches[k] }, startStep: q.startStep, endStep: q.endStep, result: q.result, path: q.path, final: q.b, rest: q.rest }))
   };
 }
