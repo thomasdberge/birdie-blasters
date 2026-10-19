@@ -7,6 +7,9 @@ Built with Three.js and Vite.
 ## Commands
 - `npm install` once, then `npm run dev` and open http://localhost:5173
 - `npm run build` writes a static site to `dist/`; `npm run preview` serves it
+- `npm test` runs the tests. `tests/golden/shots.json` records how ~200 seeded
+  shots play out; update it with `npx vitest run -u` only after an intended
+  change to how shots play.
 
 ## Code layout
 - `src/core/`: physics, weapons, courses and rules. No Three.js or DOM imports.
