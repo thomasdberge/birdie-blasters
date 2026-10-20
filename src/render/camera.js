@@ -1,4 +1,5 @@
-// The camera: first person while aiming, a chase cam during flight, a slow orbit between holes.
+// The camera: first person while aiming, over the shooter's shoulder while watching someone else's turn online, a chase
+// cam during flight, a slow orbit between holes.
 
 import * as THREE from 'three';
 import { clamp, lerp } from '../core/math.js';
@@ -13,7 +14,8 @@ function keepAbove(v, m) { const M = world.M; if (!M) return; const h = M.height
 export function updateCamera(dt) {
   const M = world.M; if (!M) return;
   let k = 3;
-  if (state.phase === 'setup' || state.phase === 'between' || state.phase === 'end') {
+  const shooter = state.players[state.cur];
+  if (state.phase === 'setup' || state.phase === 'between' || state.phase === 'end' || (state.phase === 'watch' && !shooter)) {
     const mid = { x: (M.tee.x + M.cup.x) / 2, z: (M.tee.z + M.cup.z) / 2 }, a = clock.t * 0.06;
     cam.dPos.set(mid.x + Math.cos(a) * 150, 85, mid.z + Math.sin(a) * 150); cam.dLook.set(mid.x, 0, mid.z); k = 1.5;
   } else if (state.phase === 'aim' || state.phase === 'pick' || (state.phase === 'flight' && state.shot && state.shot.age < 0.35)) {
@@ -30,6 +32,12 @@ export function updateCamera(dt) {
       applyCamera(dt); return;
     }
     k = 3.2;
+  } else if (state.phase === 'watch') {
+    // Someone else's turn: over the shooter's right shoulder, looking along their aim. From the side, their name tag
+    // does not sit on top of the flag far behind them.
+    const g = shooter.char.group.position, dx = Math.sin(state.yaw), dz = Math.cos(state.yaw);
+    cam.dPos.set(g.x - dx * 10 - dz * 2, g.y + 4.5, g.z - dz * 10 + dx * 2); keepAbove(cam.dPos, 2.5);
+    cam.dLook.set(g.x + dx * 25, g.y + 1.5, g.z + dz * 25); k = 2.5;
   } else if (state.phase === 'choose' && state.choice) {
     // Look down over the bullets to choose between
     let cx = 0, cz = 0, cy = 0; for (const q of state.choice) { cx += q.b.x; cy += q.b.y; cz += q.b.z; }

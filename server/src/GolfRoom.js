@@ -1,10 +1,14 @@
-// A golf room: private, found by its short code. Players gather in the lobby until the host starts the game.
+// A golf room: private, found by its short code. Players gather in the lobby until the host starts the game; then the
+// room runs the match (src/core/match.js), and the room state shows every client where it stands.
 
 import { randomInt } from 'node:crypto';
 import { matchMaker, Room, ServerError } from '@colyseus/core';
-import { MAX_SEATS } from '../../src/core/match.js';
+import { makeMatch, MAX_SEATS } from '../../src/core/match.js';
 import { cleanName, makeRoomCode, NAME_MAX, PROTOCOL_VERSION, REJECT } from '../../src/core/protocol.js';
-import { GolfState, Seat } from './state.js';
+import { GolfState, Seat, writeMatch } from './state.js';
+
+// How long a player who dropped out of a game in progress keeps their seat
+export const RECONNECT_SECONDS = 60;
 
 // At most CREATE_LIMIT new rooms per IP address in any CREATE_WINDOW_MS
 export const CREATE_LIMIT = 10, CREATE_WINDOW_MS = 10 * 60 * 1000;
@@ -74,6 +78,20 @@ export class GolfRoom extends Room {
     if (!this.state.host) this.state.host = client.sessionId;
   }
 
+  // A connection lost during a game (a reload, a network drop) keeps the seat for a while; the same browser tab can come
+  // back with its reconnection token. In the lobby the seat is freed at once (onLeave).
+  onDrop(client) {
+    const seat = this.seatOf(client);
+    if (this.state.phase !== 'playing' || !seat) return;
+    seat.connected = false;
+    this.allowReconnection(client, RECONNECT_SECONDS);
+  }
+
+  onReconnect(client) {
+    const seat = this.seatOf(client);
+    if (seat) seat.connected = true;
+  }
+
   onLeave(client) {
     const seats = this.state.seats, i = seats.findIndex(s => s.sessionId === client.sessionId);
     if (i < 0) return;
@@ -85,8 +103,13 @@ export class GolfRoom extends Room {
     }
   }
 
+  seatOf(client) { return this.state.seats.find(s => s.sessionId === client.sessionId); }
+
   async start(client) {
     if (this.state.phase !== 'lobby' || client.sessionId !== this.state.host || this.state.seats.length < this.state.minPlayers) return;
+    // Seats keep their lobby order, so seat i in the room is seat i in the match
+    this.match = makeMatch(this.state.seats.map(s => s.name), Math.random);
+    writeMatch(this.state, this.match.state);
     this.state.phase = 'playing';
     await this.lock(); // nobody joins a game in progress
   }

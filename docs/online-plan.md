@@ -16,7 +16,7 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 4 | One-screen game runs on the match | `34747ee` |
 | 5 | Game server with private rooms | `3feb680` |
 | 6 | Online menu, lobby and invite links | `f3e2ae2` |
-| 7 | The server runs the match | to do |
+| 7 | The server runs the match | done (hash added with step 8) |
 | 8 | Shots decided by the server | to do |
 | 9 | Shot clock | to do |
 | 10 | Disconnects and reconnecting | to do |
@@ -77,6 +77,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
   the hole forever, since a hole only ends when everyone has holed out or reached par + 5.
 - The assault rifle keeps "pick which bullet counts". That needs one extra message (`chooseBullet`) besides weapon,
   yaw, pitch and power. The choice has its own 15 seconds; after that the bullet nearest the cup counts.
+- **Turn alert:** when it becomes your turn, a short sound plays and the browser tab title shows "Your turn!" until you
+  act (pick a weapon) or the turn passes, so players who look away don't lose strokes to the shot clock.
 
 ### Disconnects and leaving
 
@@ -84,6 +86,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
   passes at once. They rejoin the rotation when they reconnect.
 - The client keeps its reconnection token in `sessionStorage` and reconnects by itself after a reload or a network
   drop. Others see e.g. "Barry · reconnecting 0:42".
+- Only a game in progress holds seats. In the lobby a dropped connection frees the seat at once, as leaving does, and
+  the tab keeps no token.
 - Disconnecting during the rifle choice takes the bullet nearest the cup, as when time runs out.
 - Disconnected players can still be hit: their character is still standing on the course.
 - If everyone who still has to finish the hole is disconnected, the match waits (phase `waiting`) until one of them
@@ -129,8 +133,10 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
 | Too many new rooms from one IP | 429 | Too many new rooms from your network. Try again in a few minutes. |
 | Room mode other than private | 400 | Only private rooms are available |
 
-- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 1) is raised whenever messages or room state change in a way an
+- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 2) is raised whenever messages or room state change in a way an
   older client cannot handle.
+- Colyseus disconnects a client that sends a message type the room has no handler for, so a client never sends a
+  message before the server handles it.
 - Room creation is limited to 10 per IP address in any 10 minutes. `create` and `joinOrCreate` both count; joining a
   room is not limited.
 - Colyseus's own errors (codes 520–526) are turned into plain messages by the client: "not found" becomes "No room with
@@ -194,20 +200,35 @@ menu and lobby. The start rule moved into the room state (`minPlayers`). After t
 "Starting the game…": that is where step 7 takes over. *Test: four browsers including a phone-sized one on the Wi-Fi
 address, then two PC tabs and a phone by hand.*
 
-### Phase C: the server decides every shot (to do)
+### Phase C: the server decides every shot (in progress)
 
-**7. The server runs the match**
-- On start, the room creates `makeMatch(seat names, Math.random)` with seats in lobby order.
-- Mirror the match state in the room schema: `hole`, `turn`, `cur`, match `phase`, `wind` (`x`, `z`, `dir`, `speed`), and
-  per seat `ball`, `stand`, `strokes`, `done`, `picked`, `out` and `scores`. Schema numbers cannot be null, so store
-  "not played" as 0 (real scores are at least 1).
-- Clients render the course, characters, HUD and minimap from the room state through the same display copies as the
-  one-screen game. Only the active player gets the golf bag; everyone else watches from a camera behind the shooter.
-- `src/game/` calls `game.match.shoot()` and gets the shot back at once. Online, the result arrives in a message, so
-  give the online client a remote match with the same shape whose actions send messages, and start playback when the
-  result arrives.
+**7. The server runs the match** · done
+- On start, the room creates `makeMatch(seat names, Math.random)` with seats in lobby order, so seat i in the room is
+  seat i in the match. Characters keep the look they had in the lobby.
+- The room state mirrors the match: `match` (`phase`, `hole`, `turn`, `cur`, `wind` with `x`, `z`, `dir`, `speed`), and
+  per seat `ball`, `stand`, `strokes`, `done`, `picked`, `out` and `scores`. Scores store "not played" as 0 (real
+  scores are at least 1); a seat that is out keeps its last stand, read as nobody standing there. Positions and wind are
+  `float64`: `t.number()` arrives as float32, and clients must see exactly the server's numbers. `writeMatch`
+  (`server/src/state.js`) copies a match into the room state; `readMatch` (`src/net/remoteMatch.js`) reads it back.
+- The online client plays a remote match (`src/net/remoteMatch.js`) with the same shape as `makeMatch`: its state is
+  read from the room state, and `src/game/online.js` shows the hole it is on through the same display copies as the
+  one-screen game. Only the active player gets the golf bag. Everyone else is in the client phase `watch`: the camera
+  sits over the shooter's right shoulder looking along their aim (toward the cup until step 12), and the shooter holds
+  the weapon the bag recommends.
+- The remote match's `shoot` turns the shot down with a message for now; step 8 makes it send `shoot`, once the server
+  handles it. `fire()` is split from `playShot()`, which step 8 calls when the result arrives.
+- Brought forward from step 10, because the test reloads a window: while a game is on, a dropped connection keeps its
+  seat for 60 seconds (`onDrop` → `allowReconnection`), and the room seat shows it as not connected meanwhile. The tab
+  keeps `{ code, token }` in `sessionStorage` (`birdieblasters-rejoin`) and rejoins with it after a reload; the token is
+  renewed on every reconnection. The match itself is not told yet: that, and what happens after 60 seconds, is step 10.
+- `PROTOCOL_VERSION` is now 2.
 
-*Test: two windows show the same hole, wind and positions; reloading a spectator's window restores the same view.*
+*Test: integration tests check that every client reads the same match as the server, at the start and after every
+action of a whole three-hole bot game (with a timed-out turn now and then and a player leaving); a dropped connection
+takes its seat back with its token while playing, but not in the lobby. In headless Edge, three players (one on a
+phone-sized screen over the Wi-Fi address) see the same match, wind, hole card and character positions; only the
+shooter has the golf bag; both spectators' cameras sit at the same spot; reloading a spectator and then the shooter
+restores the same view; a new tab with the invite link is still turned away. The one-screen playtest still passes.*
 
 **8. Shots decided by the server**
 - Messages:
@@ -229,16 +250,20 @@ both.*
 - The server sends the time left at the start of each turn and the HUD counts down, with the last 5 seconds
   highlighted. When time runs out, the room calls `match.timeout()`.
 - A shot that arrives after the deadline is rejected.
+- Turn alert: when the new turn is yours, play a short sound and set the tab title to "Your turn!"; put the title back
+  when you pick a weapon or the turn passes.
 
 *Test: with the room clock advanced in tests, no shot passes the turn at 30 s; a shot at 29.9 s counts and one at 30.1 s
-is rejected; the countdowns in two windows agree within half a second.*
+is rejected; the countdowns in two windows agree within half a second; with the window in the background, your turn
+plays the sound and shows "Your turn!" in the tab title, which goes back once you pick a weapon.*
 
 **10. Disconnects and reconnecting**
-- `onDrop` calls `allowReconnection(client, 60)` and `match.setConnected(seat, false)`. `onReconnect` sets it back.
-  When the 60 seconds run out, `match.leave(seat)` makes the player out.
+- `onDrop` already holds the seat for 60 seconds (step 7). Now it also calls `match.setConnected(seat, false)`, and
+  `onReconnect` sets it back. When the 60 seconds run out, `match.leave(seat)` makes the player out. `writeMatch` then
+  copies `connected` from the match, which becomes the only place it is kept.
 - A consented leave (the Leave button) calls `match.leave` at once.
-- The client stores `room.reconnectionToken` in `sessionStorage` and calls `reconnect` after a reload or a dropped
-  connection. The HUD shows who is reconnecting, with the seconds left.
+- The client already rejoins after a reload (step 7), and the SDK reconnects by itself after a network drop. The HUD
+  shows who is reconnecting, with the seconds left.
 - The host role passes on when the host drops; the room closes when nobody is left.
 
 *Test: integration tests for a drop during your own turn and during someone else's, a return after 30 seconds with
@@ -298,6 +323,7 @@ limit.
 - Rooms live in one server process: a deploy or crash ends games in progress.
 - On plain `http://` (the Wi-Fi address during development) browsers allow neither the clipboard nor the share sheet;
   the lobby then shows the invite link to copy by hand.
+- Phones may pause a page in the background, so there the turn alert may only sound once the page is opened again.
 
 ## Development notes
 
@@ -309,3 +335,8 @@ limit.
 - `npm test` runs everything, including the server tests on port 2568.
 - On the development PC, Windows Firewall already allows Node.js to accept connections on the (Public) Wi-Fi network.
   Guest Wi-Fi networks often stop devices reaching each other.
+- Browser tests: on the development PC, an Edge started from Node exits at once (since October 2026), so puppeteer
+  cannot launch it. Start headless Edge from PowerShell with `--remote-debugging-port=9333` (plus
+  `--enable-unsafe-swiftshader --use-angle=swiftshader` for WebGL) and `puppeteer.connect` to it.
+- Tests that import game modules inside the page must import the exact URL the page loaded: after an edit, Vite serves
+  the module as `…?t=…`, and a plain import makes a second, unused copy.

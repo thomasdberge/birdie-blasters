@@ -2,7 +2,7 @@
 // Plain JavaScript, no Three.js or DOM.
 
 // Raise this whenever messages or room state change in a way an older client cannot handle
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
 export const ROOM_NAME = 'golf';
 
 // Room codes use consonants and digits only. No vowels, and no digits that read as vowels (0, 1, 3, 4), so a code

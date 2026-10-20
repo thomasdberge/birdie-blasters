@@ -124,7 +124,7 @@ export function updateChar(c, dt, p) {
   c.recoil = Math.max(0, c.recoil - dt * 4); inner.position.z = -c.recoil * 0.35;
   // face direction
   let want = g.rotation.y;
-  if (p && state.players[state.cur] === p && (state.phase === 'aim' || state.phase === 'pick' || state.phase === 'flight')) want = state.yaw;
+  if (p && state.players[state.cur] === p && ['aim', 'pick', 'watch', 'flight'].includes(state.phase)) want = state.yaw;
   else if (p && p.done) want = Math.atan2(camera.position.x - g.position.x, camera.position.z - g.position.z);
   else if (state.cur >= 0 && state.players[state.cur]) { const q = state.players[state.cur].char.group.position; if (q !== g.position) want = Math.atan2(q.x - g.position.x, q.z - g.position.z); }
   if (c.mode !== 'fly') g.rotation.y = angLerp(g.rotation.y, want, 1 - Math.exp(-dt * 8));

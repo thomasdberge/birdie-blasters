@@ -1,4 +1,4 @@
-// Talking to the game server: creating and joining private rooms.
+// Talking to the game server: creating and joining private rooms, and rejoining one after a reload.
 
 import { PROTOCOL_VERSION, REJECT, ROOM_NAME } from '../core/protocol.js';
 
@@ -17,6 +17,8 @@ async function sdk() {
 }
 export async function createRoom(name) { return (await sdk()).create(ROOM_NAME, { version: PROTOCOL_VERSION, name, mode: 'private' }); }
 export async function joinRoom(code, name) { return (await sdk()).joinById(code, { version: PROTOCOL_VERSION, name }); }
+// token: room.reconnectionToken from the earlier connection
+export async function rejoinRoom(token) { return (await sdk()).reconnect(token); }
 
 // What to tell the player when a request was turned down or the server could not be reached
 export function explain(e) {

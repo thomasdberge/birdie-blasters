@@ -1,10 +1,16 @@
-// The golf room through the real browser SDK: private rooms by code, the lobby, starting, and turning requests down.
+// The golf room through the real browser SDK: private rooms by code, the lobby, starting, turning requests down, the
+// match in the room state, and taking a seat back after a reload.
+import { isDeepStrictEqual } from 'node:util';
 import { Client } from '@colyseus/sdk';
 import { boot } from '@colyseus/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
+import { courseModel } from '../../src/core/match.js';
 import { CODE_ALPHABET, PROTOCOL_VERSION, REJECT, ROOM_NAME } from '../../src/core/protocol.js';
+import { WEAPONS, widx } from '../../src/core/weapons.js';
+import { readMatch } from '../../src/net/remoteMatch.js';
 import { server } from '../src/app.js';
 import { CREATE_LIMIT, resetCreateLimits } from '../src/GolfRoom.js';
+import { writeMatch } from '../src/state.js';
 
 let colyseus;
 beforeAll(async () => { colyseus = await boot(server); });
@@ -30,6 +36,42 @@ async function until(room, check) {
   throw new Error('room state did not sync: ' + JSON.stringify(room.state && room.state.toJSON()));
 }
 const seats = state => state.seats.map(s => ({ name: s.name, style: s.style, connected: s.connected }));
+
+// Starts a game with these players; the first creates the room and is host
+async function startGame(...names) {
+  const rooms = [await create(names[0])];
+  for (const name of names.slice(1)) rooms.push(await join(rooms[0].roomId, name));
+  await until(rooms[0], s => s.seats.length === names.length);
+  rooms[0].send('start');
+  for (const room of rooms) await until(room, s => s.phase === 'playing');
+  return rooms;
+}
+// The match the server runs for a room
+const serverRoom = room => colyseus.getRoomById(room.roomId);
+// What the room state mirrors of a match. Not the match's own bookkeeping (turn order, the hole's base wind, a pending
+// rifle choice), not style (the room picks the looks) and not connected (the room tracks that itself for now).
+const mirrored = ms => ({
+  phase: ms.phase, hole: ms.hole, turn: ms.turn, cur: ms.cur, wind: ms.wind,
+  seats: ms.seats.map(s => ({ name: s.name, ball: s.ball, stand: s.stand, strokes: s.strokes, done: s.done, picked: s.picked, out: s.out, scores: s.scores }))
+});
+const shown = room => mirrored(readMatch(room.state));
+// Waits until a client's copy of the match is the server's
+async function inStep(room, ms) {
+  for (let i = 0; i < 200 && !isDeepStrictEqual(shown(room), mirrored(ms)); i++) await new Promise(r => setTimeout(r, 10));
+  expect(shown(room)).toEqual(mirrored(ms));
+}
+// A simple bot: the shortest weapon that reaches, aimed at the cup at its default angle, power by distance
+function botAim(ms) {
+  const s = ms.seats[ms.cur], M = courseModel(ms.hole), d = Math.hypot(M.cup.x - s.ball.x, M.cup.z - s.ball.z);
+  const weapon = ['dart', 'pistol', 'shotgun', 'auto', 'sniper', 'grenade', 'bazooka'].map(widx).find(i => WEAPONS[i].range >= d) ?? widx('bazooka');
+  const W = WEAPONS[weapon];
+  return { weapon, yaw: Math.atan2(M.cup.x - s.ball.x, M.cup.z - s.ball.z), pitch: W.pitchDef, power: Math.min(1, Math.max(0.05, d / W.range)) };
+}
+// A page that is closed or reloaded: the connection drops without a goodbye, and nothing reconnects by itself
+async function dropConnection(room) {
+  room.reconnection.enabled = false;
+  await room.leave(false);
+}
 
 describe('private rooms', () => {
   test('creating a room gives a 5-character code, and the creator is host in seat 1', async () => {
@@ -145,7 +187,7 @@ describe('the lobby', () => {
 describe('turning requests down', () => {
   test('an outdated client is told to reload, when creating and when joining', async () => {
     const ann = await create('Ann');
-    for (const version of [PROTOCOL_VERSION - 1, PROTOCOL_VERSION + 1, undefined, '1']) {
+    for (const version of [PROTOCOL_VERSION - 1, PROTOCOL_VERSION + 1, undefined, String(PROTOCOL_VERSION)]) {
       for (const request of [colyseus.sdk.create(ROOM_NAME, { version, name: 'Ben' }), colyseus.sdk.joinById(ann.roomId, { version, name: 'Ben' })]) {
         const e = await turnedDown(request);
         expect([e.code, e.message]).toEqual([REJECT.version.code, 'New version available, please reload']);
@@ -183,5 +225,67 @@ describe('turning requests down', () => {
         else expect((await turnedDown(request)).code).toBe(REJECT.tooManyRooms.code);
       }
     } finally { delete process.env.CLIENT_IP_HEADER; }
+  });
+});
+
+describe('the match', () => {
+  test('starting deals the first hole: every client sees the same hole, wind and positions as the server', async () => {
+    const rooms = await startGame('Ann', 'Ben', 'Cy');
+    const ms = serverRoom(rooms[0]).match.state;
+    expect([ms.phase, ms.hole, ms.turn, ms.cur]).toEqual(['turn', 0, 1, 0]);
+    expect(ms.seats.map(s => s.name)).toEqual(['Ann', 'Ben', 'Cy']); // lobby order
+    const M = courseModel(0);
+    expect(ms.seats.every(s => isDeepStrictEqual(s.ball, { x: M.tee.x, y: M.tee.y, z: M.tee.z }))).toBe(true);
+    for (const room of rooms) await inStep(room, ms);
+    // Characters keep the look they had in the lobby
+    expect(readMatch(rooms[1].state).seats.map(s => [s.name, s.style])).toEqual([['Ann', 0], ['Ben', 1], ['Cy', 2]]);
+  });
+
+  test('as the match plays out, the room state keeps every client in step with the server', async () => {
+    const rooms = await startGame('Ann', 'Ben', 'Cy');
+    const room = serverRoom(rooms[0]), match = room.match, phases = new Set();
+    // Shots are not sent by clients yet, so the test plays the server's match itself: a bot, a timed-out turn now and
+    // then, and a player who leaves halfway
+    for (let n = 0; match.state.phase !== 'end'; n++) {
+      if (n > 400) throw new Error('the game did not finish');
+      const ms = match.state;
+      if (ms.phase === 'between') match.nextHole();
+      else if (ms.phase === 'settle') match.next();
+      else if (ms.phase === 'choose') match.chooseBullet(ms.choice.seat, 0);
+      else if (n % 7 === 6) match.timeout();
+      else match.shoot(ms.cur, botAim(ms));
+      if (n === 30) match.leave(1);
+      phases.add(ms.phase);
+      writeMatch(room.state, ms); room.broadcastPatch();
+      for (const r of rooms) await inStep(r, ms);
+    }
+    expect([...phases]).toEqual(expect.arrayContaining(['turn', 'settle', 'between', 'end']));
+    const final = readMatch(rooms[2].state);
+    expect(final.seats[1].out).toBe(true);
+    expect(final.seats[1].stand).toBe(null);
+    expect(final.seats.map(s => s.scores)).toEqual(match.state.seats.map(s => s.scores));
+  });
+});
+
+describe('dropping out', () => {
+  test('a reloaded page takes its seat back with its reconnection token and sees the same match', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben');
+    const token = ben.reconnectionToken;
+    await dropConnection(ben);
+    await until(ann, s => s.seats[1].connected === false);
+    const back = await colyseus.sdk.reconnect(token);
+    expect(back.sessionId).toBe(ben.sessionId);
+    await until(ann, s => s.seats[1].connected === true);
+    await inStep(back, serverRoom(ann).match.state);
+    expect(readMatch(back.state)).toEqual(readMatch(ann.state));
+  });
+
+  test('in the lobby a dropped player loses the seat at once, and cannot take it back', async () => {
+    const ann = await create('Ann'), ben = await join(ann.roomId, 'Ben');
+    await until(ann, s => s.seats.length === 2);
+    const token = ben.reconnectionToken;
+    await dropConnection(ben);
+    await until(ann, s => s.seats.length === 1);
+    expect(await turnedDown(colyseus.sdk.reconnect(token))).toBeInstanceOf(Error);
   });
 });

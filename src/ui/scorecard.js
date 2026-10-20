@@ -4,7 +4,7 @@ import { HOLES } from '../core/courses.js';
 import { $ } from '../platform.js';
 import { cancelCharge } from '../game/shot.js';
 import { state } from '../game/state.js';
-import { nextHole, playAgain } from '../game/turns.js';
+import { leaveGame, nextHole, playAgain } from '../game/turns.js';
 import { ui } from './elements.js';
 import { exitLock } from './pointerLock.js';
 
@@ -37,7 +37,7 @@ export function showBoard(kind) {
     $('#scTitle').textContent = state.players.length === 1 ? `${totals[0]} strokes in total` : winners.length > 1 ? 'It’s a tie!' : `${winners[0].name} wins!`;
     $('#scSub').textContent = state.players.length === 1 ? `The course is par ${parTot}. ${totals[0] - parTot <= 0 ? 'Nicely shot.' : 'Try to beat yourself next round.'}` : winners.length > 1 ? `${winners.map(w => w.name).join(' and ')} shared the win on ${best} strokes.` : `${best} strokes over three holes. The course is par ${parTot}.`;
     focusBtn = btn('Play again', 'btn-primary', playAgain);
-    btn('New players', 'btn-ghost', () => { state.players.forEach(p => { p.char.group.visible = false; }); ui.board.hidden = true; ui.hud.hidden = true; ui.setup.hidden = false; state.phase = 'setup'; });
+    btn('New players', 'btn-ghost', leaveGame);
   } else if (kind === 'hole') {
     const def = HOLES[state.holeIdx];
     $('#scTitle').textContent = `Hole ${state.holeIdx + 1} done`;

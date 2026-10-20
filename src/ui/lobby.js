@@ -1,18 +1,22 @@
-// Playing online: the nickname, creating a room or joining one by code or invite link, and the lobby.
+// Playing online: the nickname, creating a room or joining one by code or invite link, the lobby, and rejoining the game
+// after a reload.
 
 import { MAX_SEATS } from '../core/match.js';
 import { cleanName, readRoomCode, REJECT } from '../core/protocol.js';
-import { $, COARSE, store } from '../platform.js';
+import { $, COARSE, session, store } from '../platform.js';
 import { sfx } from '../audio/sfx.js';
+import { playOnline, stopOnline } from '../game/online.js';
 import { STYLES } from '../game/state.js';
-import { createRoom, explain, joinRoom } from '../net/online.js';
+import { createRoom, explain, joinRoom, rejoinRoom } from '../net/online.js';
 
 const el = {
   setup: $('#setup'), lobby: $('#lobby'), name: $('#onlineName'), code: $('#joinCode'), create: $('#createBtn'), join: $('#joinBtn'),
   invited: $('#invited'), err: $('#onlineErr'), roomCode: $('#lobbyCode'), inviteBtn: $('#inviteBtn'), link: $('#inviteLink'),
   players: $('#lobbyPlayers'), status: $('#lobbyStatus'), start: $('#lobbyStart'), leave: $('#lobbyLeave')
 };
-let room = null, leaving = false, invite = null, flashTO = 0;
+// The game this tab is in, { code, token }, so that a reload can take the seat back (the server holds it for a while)
+const REJOIN_KEY = 'birdieblasters-rejoin';
+let room = null, leaving = false, playing = false, invite = null, flashTO = 0;
 
 const inviteLink = code => `${location.origin}${location.pathname}?room=${code}`;
 // Phones get the share sheet; computers copy the link
@@ -50,15 +54,36 @@ function join() {
 async function enter(request, name) {
   showError('');
   el.create.disabled = el.join.disabled = true;
-  try { room = await request; } catch (e) { showError(explain(e)); return; } finally { el.create.disabled = el.join.disabled = false; }
+  let joined;
+  try { joined = await request; } catch (e) { showError(explain(e)); return; } finally { el.create.disabled = el.join.disabled = false; }
   store.set('birdieblasters-online-name', name);
-  leaving = false;
+  attach(joined);
+}
+// After a reload in the middle of a game, this tab takes its seat back
+export async function rejoin(code) {
+  const saved = session.get(REJOIN_KEY);
+  if (!saved || saved.code !== code) return;
+  el.invited.textContent = `Rejoining the game in room ${code}…`;
+  el.create.disabled = el.join.disabled = true;
+  let joined;
+  try { joined = await rejoinRoom(saved.token); } catch (e) { session.remove(REJOIN_KEY); showInvite(code); return; } finally { el.create.disabled = el.join.disabled = false; }
+  attach(joined);
+}
+// This tab is now in the room: the lobby shows it, and the game takes over once it has started
+function attach(joined) {
+  room = joined; leaving = false; playing = false;
   history.replaceState(null, '', inviteLink(room.roomId)); // the address bar doubles as the invite link
   el.setup.hidden = true; el.lobby.hidden = false; el.link.hidden = true; el.inviteBtn.textContent = inviteLabel();
   room.onStateChange(render);
-  room.onLeave(() => { const lost = !leaving; room = null; backToSetup(lost ? 'You lost the connection to the room.' : ''); });
+  room.onReconnect(remember); // every reconnection brings a new token
+  room.onLeave(() => {
+    const lost = !leaving; room = null; session.remove(REJOIN_KEY);
+    if (playing) { playing = false; stopOnline(); }
+    backToSetup(lost ? 'You lost the connection to the room.' : '');
+  });
   render(room.state);
 }
+function remember() { if (room && playing) session.set(REJOIN_KEY, { code: room.roomId, token: room.reconnectionToken }); }
 function backToSetup(message) {
   history.replaceState(null, '', location.pathname);
   el.lobby.hidden = true; el.setup.hidden = false;
@@ -71,19 +96,21 @@ async function leaveRoom() {
 
 function render(s) {
   if (!room || !s || !s.seats) return;
-  const me = room.sessionId, seats = [...s.seats], playing = s.phase === 'playing', isHost = s.host === me;
+  if (s.phase === 'playing') {
+    if (!playing) { playing = true; el.lobby.hidden = true; remember(); playOnline(room); }
+    return;
+  }
+  const me = room.sessionId, seats = [...s.seats], isHost = s.host === me;
   el.roomCode.textContent = s.code;
   const rows = seats.map(seat => playerRow(seat, seat.sessionId === s.host, seat.sessionId === me));
   for (let i = seats.length; i < MAX_SEATS; i++) { const li = document.createElement('li'); li.className = 'open'; li.textContent = 'Open seat'; rows.push(li); }
   el.players.replaceChildren(...rows);
   const needed = s.minPlayers - seats.length, host = seats.find(x => x.sessionId === s.host);
-  el.status.textContent = playing ? 'Starting the game…'
-    : !isHost ? `Waiting for ${host ? host.name : 'the host'} to start the game.`
+  el.status.textContent = !isHost ? `Waiting for ${host ? host.name : 'the host'} to start the game.`
     : needed > 0 ? `Waiting for ${needed === 1 ? 'one more player' : `${needed} more players`}. Send them the invite link.`
     : 'Everyone here? Start the game.';
-  el.start.hidden = !isHost || playing;
+  el.start.hidden = !isHost;
   el.start.disabled = needed > 0;
-  el.inviteBtn.hidden = playing;
 }
 function playerRow(seat, host, you) {
   const li = document.createElement('li'), st = STYLES[seat.style] || STYLES[0];

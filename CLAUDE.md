@@ -34,9 +34,13 @@ Built with Three.js and Vite.
   2 players to start (in development the host may start alone).
 - `src/net/`: talking to the game server. The online menu and lobby screen are
   in `src/ui/lobby.js`; the browser SDK only loads when someone goes online.
+  `remoteMatch.js` is the match an online client plays: the same shape as
+  `makeMatch`, with its state read from the room state (`server/src/state.js`
+  writes it).
 - `src/game/`: plays the match on screen. The match decides each shot when it
   is fired; `shot.js` plays it back, and the players' ball, strokes, done and
   scores in `state.js` are display copies that catch up as it plays out.
+  Online, `online.js` makes the screen follow the room state.
 - `src/render/`: everything Three.js (scene, course, characters, camera, effects).
 - `src/ui/`: HUD, golf bag, reticle, minimap, scorecard, setup screen and input.
 - `src/audio/`: synthesised sound effects.

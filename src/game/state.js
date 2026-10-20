@@ -8,7 +8,12 @@ export const STYLES = [
 ];
 // The match (src/core/match.js) decides every shot and turn the moment it happens. The players' ball, strokes, done,
 // picked and scores below are what the screen shows; they catch up with the match as each shot plays out.
-export const game = { match: null };
+// online is null on one screen. Online, the match is a remote one (src/net/remoteMatch.js) and seat is this player's.
+export const game = { match: null, online: null };
+// Whether this screen plays seat i: every seat on one screen, only its own online
+export function playsSeat(i) { return !game.online || game.online.seat === i; }
+// phase: setup · pick (golf bag open) · aim · flight · choose · settle · between · end, and online also watch (someone
+// else's turn)
 export const state = {
   phase: 'setup', holeIdx: 0, players: [], cur: -1,
   weapon: 0, yaw: 0, pitch: 30, zoom: false, zoomF: 1, charging: false, chargeT: 0, power: 0,

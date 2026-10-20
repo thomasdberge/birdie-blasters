@@ -36,8 +36,14 @@ export function releaseCharge() {
   fire(state.power);
 }
 function fire(power) {
-  const pi = state.cur, p = state.players[pi], W = WEAPONS[state.weapon];
-  const { shot, result } = game.match.shoot(pi, { weapon: state.weapon, yaw: state.yaw, pitch: state.pitch, power });
+  const pi = state.cur, aim = { weapon: state.weapon, yaw: state.yaw, pitch: state.pitch, power };
+  const { shot, result, error } = game.match.shoot(pi, aim);
+  if (error) { setFill(0); toast(error); return; }
+  playShot(pi, aim, shot, result);
+}
+// Plays a shot the match has decided. pi: the shooter's seat · aim: what they fired · shot, result: from match.shoot
+export function playShot(pi, aim, shot, result) {
+  const p = state.players[pi], W = WEAPONS[aim.weapon], power = aim.power;
   p.strokes++; state.shotsFired++;
   state.phase = 'flight'; setControls(false); setFill(power); updateHUD();
   ui.fireSub.textContent = Math.round(power * 100) + '%';
@@ -45,7 +51,7 @@ function fire(power) {
   // step: simulation steps played so far · next: the next event to show · hit: someone was hit
   state.shot = { W, shooter: pi, age: 0, acc: 0, step: 0, next: 0, events: shot.events, outcome: shot.outcome, result, hit: false, active: true, color: p.color, projs, primary: 0 };
   projs.forEach(q => { q.vis.g.visible = false; placeProjectile(q, 0); });
-  cam.hdir.set(Math.sin(state.yaw), 0, Math.cos(state.yaw));
+  cam.hdir.set(Math.sin(aim.yaw), 0, Math.cos(aim.yaw));
   p.char.recoil = W.id === 'bazooka' || W.id === 'shotgun' ? 1 : 0.6; p.char.ring.visible = false;
   vm.recoil = { dart: 0.5, auto: 0.45, pistol: 0.6, flare: 0.7 }[W.id] || 1; setZoom(false);
   sfx.shot(W.id);

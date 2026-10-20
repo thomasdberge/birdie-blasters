@@ -3,10 +3,11 @@
 import { HOLES } from '../core/courses.js';
 import { makeMatch } from '../core/match.js';
 import { WEAPONS, widx } from '../core/weapons.js';
-import { setZoom } from './aim.js';
-import { distToCup, game, later, state, STYLES, timers, world } from './state.js';
+import { holds, setZoom } from './aim.js';
+import { cancelCharge } from './shot.js';
+import { distToCup, game, later, playsSeat, state, STYLES, timers, world } from './state.js';
 import { cam } from '../render/camera.js';
-import { makeChar, setCharTarget } from '../render/characters.js';
+import { makeChar, setCharTarget, showWeapon } from '../render/characters.js';
 import { clearParts } from '../render/particles.js';
 import { removeShotVisuals } from '../render/projectiles.js';
 import { disposeTree, scene } from '../render/scene.js';
@@ -17,6 +18,7 @@ import { ui } from '../ui/elements.js';
 import { fmt1 } from '../ui/format.js';
 import { setControls, setFill, showBanner, updateHUD } from '../ui/hud.js';
 import { buildMapStatic, sizeMap } from '../ui/minimap.js';
+import { exitLock } from '../ui/pointerLock.js';
 import { showBoard } from '../ui/scorecard.js';
 
 // The screen catches up with what the match says about a player
@@ -33,15 +35,28 @@ export function layoutChars(instant) {
     p.char.ring.visible = false;
   });
 }
-export function newGame(names) {
+// The players on screen, one per seat. seats: [{ name, style }], style being an index into STYLES.
+export function setPlayers(seats) {
   for (const p of state.players) { scene.remove(p.char.group); disposeTree(p.char.group); }
-  state.players = names.map((n, i) => {
-    const st = STYLES[i];
-    return { name: n, color: st.color, style: st, ball: null, strokes: 0, done: false, picked: false, scores: [], char: makeChar(st, n) };
+  state.players = seats.map(({ name, style }) => {
+    const st = STYLES[style];
+    return { name, color: st.color, style: st, ball: null, strokes: 0, done: false, picked: false, scores: [], char: makeChar(st, name) };
   });
   state.shotsFired = 0;
+}
+export function newGame(names) {
+  setPlayers(names.map((name, i) => ({ name, style: i })));
+  game.online = null;
   game.match = makeMatch(names, Math.random);
   showHole();
+}
+// Back to the start screen
+export function leaveGame() {
+  timers.length = 0; state.waitFn = null;
+  cancelCharge(); exitLock(); holds.clear();
+  state.players.forEach(p => { p.char.group.visible = false; });
+  ui.board.hidden = true; ui.hud.hidden = true; ui.setup.hidden = false; state.phase = 'setup';
+  game.online = null;
 }
 export function playAgain() {
   game.match = makeMatch(state.players.map(p => p.name), Math.random);
@@ -51,19 +66,20 @@ export function nextHole() {
   game.match.nextHole();
   showHole();
 }
-// Shows the hole the match is on: builds the course, puts everyone on the tee and shows the first turn
-function showHole() {
-  const idx = game.match.state.hole;
+// Shows the hole the match is on: builds the course, puts everyone where they stand and shows the turn
+export function showHole() {
+  const ms = game.match.state, idx = ms.hole;
   timers.length = 0; state.waitFn = null;
   removeShotVisuals(); state.shot = null; state.choice = null; if (ui.choose) ui.choose.hidden = true; clearParts();
   state.holeIdx = idx; buildWorld(idx); buildMapStatic();
   state.players.forEach((p, i) => { showSeat(i); p.char.inner.rotation.set(0, 0, 0); });
-  state.cur = game.match.state.cur;
+  state.cur = ms.cur;
   layoutChars(true);
   ui.setup.hidden = true; ui.board.hidden = true; ui.hud.hidden = false;
   sizeMap(); buildMapStatic();
   cam.arrived = false;
-  beginTurn();
+  if (ms.phase === 'turn') beginTurn();
+  else { state.phase = 'watch'; setControls(false); world.M.wind = { ...ms.wind }; } // online, between turns: watch until the next one
   const def = HOLES[idx];
   later(0.1, () => showBanner(`Hole ${idx + 1}: ${def.name}`, `Par ${def.par} · ${Math.round(Math.hypot(world.M.cup.x - world.M.tee.x, world.M.cup.z - world.M.tee.z))} m · wind ${fmt1(world.M.wind.speed)} m/s`, '#f2eed6'));
 }
@@ -89,7 +105,16 @@ function beginTurn() {
   vm.handMat.color.set(p.color);
   setZoom(false); state.zoomF = 1.001;
   updateHUD();
-  openPick(true);
+  if (playsSeat(i)) openPick(true); else watchTurn();
+}
+// Someone else's turn, online: no golf bag for you. The camera watches over the shooter's shoulder, and they hold the
+// weapon the bag recommends.
+function watchTurn() {
+  const p = state.players[state.cur], w = autoWeapon(p);
+  cancelCharge(); setZoom(false); exitLock(); holds.clear();
+  state.phase = 'watch'; ui.pick.hidden = true; ui.hud.classList.remove('picking'); setControls(false);
+  state.weapon = w; state.pitch = WEAPONS[w].pitchDef; showWeapon(p.char, WEAPONS[w].id);
+  ui.hint.textContent = `${p.name} is lining up a shot.`;
 }
 // Everyone has watched the shot land: the match starts the next turn or ends the hole
 export function nextTurn() {
