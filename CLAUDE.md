@@ -61,5 +61,7 @@ Built with Three.js and Vite.
    physics, weapons, courses, rendering and UI.
 2. Deploy the frontend (Vercel or Netlify).
 3. Live online multiplayer: rooms with invite links, a shot clock per turn,
-   and a server that runs the physics and decides every shot.
+   and a server that runs the physics and decides every shot. In progress on
+   the `online` branch; the plan, its progress and every decision so far are in
+   `docs/online-plan.md` (update it in the same commit as each step).
 4. Real 3D character models (glTF) later.
