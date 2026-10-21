@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { STEP } from './core/physics.js';
 import { $ } from './platform.js';
 import { applyHolds, holds } from './game/aim.js';
-import { initOnline, shotClockLeft } from './game/online.js';
+import { initOnline, shotClockLeft, stopAtZero } from './game/online.js';
 import { playShotStep } from './game/shot.js';
 import { clock, distToCup, game, state, timers, world } from './game/state.js';
 import { cam, fpView, updateCamera } from './render/camera.js';
@@ -35,6 +35,7 @@ function frame(now) {
   if (state.slowT > 0) { state.slowT -= dt; if (state.slowT <= 0) state.timeScale = 1; }
   const sdt = dt * state.timeScale;
   for (let i = timers.length - 1; i >= 0; i--) { const tm = timers[i]; tm.t -= dt; if (tm.t <= 0) { timers.splice(i, 1); tm.fn(); } }
+  if (game.online) stopAtZero();
   if (state.phase === 'aim') {
     applyHolds(dt);
     if (state.charging) { state.chargeT += dt; const x = (state.chargeT * 0.72) % 2; state.power = x < 1 ? x : 2 - x; setFill(state.power); }

@@ -18,7 +18,7 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 6 | Online menu, lobby and invite links | `f3e2ae2` |
 | 7 | The server runs the match | `51c8609` |
 | 8 | Shots decided by the server | `b45f3b0`, `db90594` |
-| 9 | Shot clock | done (hash added with step 10) |
+| 9 | Shot clock | `420b57b`, follow-up (hash added with step 10) |
 | 10 | Disconnects and reconnecting | to do |
 | 11 | Between holes and the end | to do |
 | 12 | Live aim for spectators | to do |
@@ -84,8 +84,14 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 - A shot carries the turn it was fired in, and the room turns down a shot meant for another turn. Otherwise a late
   shot from a turn that just timed out could count in the next one when the same player has it (the last player left
   on a hole).
-- The deadline is exact: a shot after it is refused as too late ("Too late: your time ran out.") even if the room clock,
-  which only ticks with each state patch, has not fired yet.
+- **Grace for network delay:** screens count down to 0 at the deadline (30 seconds), but the room takes a shot until
+  half a second after it, and only then passes the turn. A screen's countdown runs behind the server's by a network
+  delay, and a shot needs another to arrive, so a player who fires while their screen still shows time left never loses
+  the shot to latency (up to half a second there and back). At 0 on screen, Fire goes off and any charge is dropped, so
+  nothing is fired that could arrive after the grace. The rifle choice has the same grace, and its buttons go at 0.
+- After the grace the cut is exact: a shot after it is refused as too late ("Too late: your time ran out.") even if the
+  room clock, which only ticks with each state patch, has not fired yet. Nor does the turn pass early: the room clock
+  can fire a timeout up to one patch early, and the room then waits on.
 - The time left is in the room state, written when the clock starts and about once a second. Each screen counts down
   from the last value it got, so a reloaded or lagging screen is right again within a second.
 - **Turn alert:** when it becomes your turn, a short sound plays and the browser tab title shows "Your turn!" until you
@@ -285,7 +291,7 @@ back in both; Ann picks a rifle bullet while Ben sees the numbered bullets witho
 background and its animation paused, the next turn starts 0.1 s after Ben has watched his shot, and Ann's screen has
 already skipped to it. The step 7 browser test and the one-screen playtest still pass.*
 
-**9. Shot clock** · done
+**9. Shot clock** · `420b57b`, follow-up (hash added with step 10)
 - The room's `sync()` copies the match into the room state and starts the clock whenever a turn or a rifle choice
   begins: 30 seconds for a turn, flight time plus 15 seconds for a choice (`this.clock.setTimeout`); anything else
   stops it. `match.clock` says what it times (`turn`, `choose` or empty) and `match.timeLeft` the milliseconds left,
@@ -294,8 +300,14 @@ already skipped to it. The step 7 browser test and the one-screen playtest still
   shows "TIME’S UP! +1 stroke. Ann’s turn passes.", the shooter's golf bag and controls close, and the next turn waits
   for `replayDone` as after a shot. When a rifle choice runs out, the bullet nearest the cup counts: `bulletChosen`
   with `timeUp: true`, and screens say "Time’s up: the bullet nearest the cup counts."
-- `shoot` carries `turn`. A shot for another turn is refused with `not your turn`, a shot after the deadline with
-  `time`. Each room has `turnSeconds` and `chooseSeconds`, which tests shorten.
+- `shoot` carries `turn`. A shot for another turn is refused with `not your turn`, a shot after the deadline and its
+  grace with `time`. Each room has `turnSeconds` and `chooseSeconds`, which tests shorten.
+- Follow-up, grace for network delay: `timeLeft` still counts down to the deadline, but the room takes a shot or a rifle
+  choice until half a second later (`GRACE_SECONDS`, the room's `graceSeconds`) and only then times out. The room clock's
+  first tick also counts the time from before a timeout was set, so a timeout can fire up to one patch early;
+  `expireAt` then sets another for the rest. Every frame online, `stopAtZero()` (`src/game/online.js`) turns Fire off,
+  drops a charge and hides the bullet buttons once the screen's own countdown has reached 0, and `startCharge()`
+  refuses from then on.
 - The clock sits on the hole card next to the current player's name, in whole seconds, red and beating for the last 5.
   It shows for the turn while the golf bag is open, while aiming and while watching, and for a rifle choice once the
   bullets have landed on that screen; not while a shot flies.
@@ -305,14 +317,18 @@ already skipped to it. The step 7 browser test and the one-screen playtest still
 
 *Test: integration tests (with the clock shortened per room) check that the clock starts with every turn, counts down
 in the room state and stops when the shot is fired; that a turn with no shot passes with a penalty stroke and everyone
-is told; that a shot 0.1 s before the deadline counts and one 0.1 s after is refused as `time` while the turn passes;
-and that an unmade rifle choice takes the bullet nearest the cup after the flight plus the choice time. In headless
+is told, never before the grace has ended; that a shot 0.4 s after the deadline counts and one 0.1 s after the grace is
+refused as `time` while the turn passes; and that an unmade rifle choice takes the bullet nearest the cup after the
+flight plus the choice time. In headless
 Edge (Ann on a computer, Ben on a phone-sized screen over the Wi-Fi address): only the player whose turn it is gets the
 sound and "Your turn!", which goes once they pick a weapon; both countdowns agree within 0.2 s at the start and at
 4.5 s; the last seconds are red in both; when Ann's 30 seconds run out both see TIME’S UP and Ann has a penalty stroke;
 no clock shows while a shot flies; Ann's tab in the background with its animation paused still gets "Your turn!" and
 the sound, and keeps the title until she picks. The step 7 and 8 browser tests and the one-screen playtest still
-pass.*
+pass. Follow-up, in headless Edge: Ann holds Space as her time runs out; at 0 on her screen the charge is dropped and
+Fire is off while the server still has her turn, Space fires nothing, and TIME’S UP follows about half a second later;
+Ben, on a phone whose every message reaches the server 0.4 s late, fires with under 0.1 s showing and the shot
+counts. The step 9 browser test still passes.*
 
 **10. Disconnects and reconnecting**
 - `onDrop` already holds the seat for 60 seconds (step 7). Now it also calls `match.setConnected(seat, false)`, and

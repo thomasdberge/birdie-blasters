@@ -4,12 +4,12 @@
 import { SHOT_REJECTED } from '../core/protocol.js';
 import { labelFont } from '../platform.js';
 import { remoteMatch } from '../net/remoteMatch.js';
-import { aimAgain, playShot, showChoice } from './shot.js';
+import { aimAgain, cancelCharge, playShot, showChoice } from './shot.js';
 import { game, state, timers } from './state.js';
 import { beginTurn, endHole, leaveGame, setPlayers, showHole, turnTimedOut } from './turns.js';
 import { removeShotVisuals } from '../render/projectiles.js';
 import { ui } from '../ui/elements.js';
-import { toast } from '../ui/hud.js';
+import { setControls, toast } from '../ui/hud.js';
 
 let room = null, ready = false, shown = null, clock = null;
 // room: a joined room whose game has started
@@ -36,6 +36,18 @@ export function shotClockLeft() {
   if (!clock || !clock.of) return null;
   const showing = clock.of === 'turn' ? ['pick', 'aim', 'watch'].includes(state.phase) : state.phase === 'choose';
   return showing ? Math.max(0, clock.ends - performance.now()) : null;
+}
+// Whether this screen's countdown has reached 0
+export function clockRanOut() { return !!clock?.of && performance.now() >= clock.ends; }
+// Every frame online. This screen's countdown runs behind the server's by a network delay, and a shot takes another to
+// arrive, so the server still takes a shot or a rifle choice half a second after its deadline. At 0 here, Fire goes off,
+// a charge is dropped and the bullet buttons go, so nothing is sent that could come too late; the turn passes when the
+// server says so.
+export function stopAtZero() {
+  if (!clockRanOut()) return;
+  cancelCharge();
+  if (!ui.fire.disabled) setControls(false);
+  if (!ui.choose.hidden) ui.choose.hidden = true;
 }
 
 // Browsers pause animation in a tab in the background, so such a tab cannot play a shot to the end. It says it has

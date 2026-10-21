@@ -459,8 +459,11 @@ describe('shot clock', () => {
 
   test('when no shot comes in time, the turn passes with a penalty stroke and everyone is told', async () => {
     const { ann, ben, room } = await timedGame(0.6);
-    const told = [received(ann, 'timeUp'), received(ben, 'timeUp')];
+    const told = [received(ann, 'timeUp'), received(ben, 'timeUp')], { deadline, closes } = room.timer, timeUp = room.timeUp, at = [];
+    room.timeUp = function () { at.push(Date.now()); return timeUp.call(this); };
+    expect(closes - deadline).toBe(500); // the half second of grace after the deadline the screens count down to
     await untilTrue(() => told.every(t => t.length === 1), 'both hear the time is up');
+    expect(at[0]).toBeGreaterThanOrEqual(closes); // never early, though the room clock's first tick may count too much
     expect(told[1][0]).toEqual({ turn: 1, seat: 0, result: { type: 'timeout', strokes: 1, done: false, picked: false } });
     expect([readMatch(ben.state).phase, readMatch(ben.state).seats[0].strokes, ben.state.match.clock]).toEqual(['settle', 1, '']);
     expect(room.match.state.seats[0].ball).toEqual(readMatch(ben.state).seats[0].ball); // still on the tee
@@ -468,18 +471,20 @@ describe('shot clock', () => {
     await until(ann, s => s.match.turn === 2 && s.match.cur === 1);
   });
 
-  test('a shot just before the deadline counts; one just after is turned down as too late, and the turn passes', async () => {
+  test('a shot up to half a second after the deadline counts; one after that is turned down as too late, and the turn passes', async () => {
     const { ann, ben, room } = await timedGame(1.5);
     const shots = received(ben, 'shotResult'), refused = received(ben, 'shotRejected'), told = received(ann, 'timeUp');
-    await wait(room.timer.deadline - Date.now() - 100);
-    ann.send('shoot', botAim(room.match.state)); // 0.1 s to spare
+    await wait(room.timer.deadline - Date.now() + 400);
+    // A screen counts down to the deadline a network delay after the server does, and the shot takes as long again
+    expect(ann.state.match.phase).toBe('turn');
+    ann.send('shoot', botAim(room.match.state));
     await untilTrue(() => shots.length === 1, 'the shot counts');
     expect(told).toEqual([]);
     watchBoth(ann, ben, 1);
     await until(ben, s => s.match.turn === 2 && s.match.clock === 'turn');
     const aim = botAim(room.match.state);
-    await wait(room.timer.deadline - Date.now() + 100);
-    ben.send('shoot', aim); // 0.1 s too late
+    await wait(room.timer.closes - Date.now() + 100);
+    ben.send('shoot', aim); // 0.1 s after the grace
     await untilTrue(() => refused.length === 1 && told.length === 1, 'the late shot is refused and the turn passes');
     expect(refused[0]).toEqual({ reason: 'time' });
     expect(told[0]).toMatchObject({ turn: 2, seat: 1, result: { type: 'timeout', strokes: 1 } });

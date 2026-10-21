@@ -14,6 +14,10 @@ export const RECONNECT_SECONDS = 60;
 export const REPLAY_MARGIN = 10;
 // The shot clock: seconds for a turn, and for picking the rifle bullet that counts
 export const TURN_SECONDS = 30, CHOOSE_SECONDS = 15;
+// Screens count down to 0 at the deadline, but the room still takes a shot or a rifle choice this many seconds after it.
+// A screen's countdown runs behind the server's by a network delay and a shot needs another to arrive, so one sent while
+// the screen still showed time left is not lost to latency. Screens let nothing be sent once they reach 0.
+export const GRACE_SECONDS = 0.5;
 
 // At most CREATE_LIMIT new rooms per IP address in any CREATE_WINDOW_MS
 export const CREATE_LIMIT = 10, CREATE_WINDOW_MS = 10 * 60 * 1000;
@@ -58,6 +62,7 @@ export class GolfRoom extends Room {
   replayMargin = REPLAY_MARGIN;
   turnSeconds = TURN_SECONDS;
   chooseSeconds = CHOOSE_SECONDS;
+  graceSeconds = GRACE_SECONDS;
 
   // Runs for every matchmaking request (create, join by code), before a room is made or a seat reserved
   static async onAuth(token, options, context) {
@@ -151,7 +156,7 @@ export class GolfRoom extends Room {
   }
 
   // Copies the match into the room state, and starts the shot clock when a turn or a rifle choice begins (wait seconds
-  // later); anything else stops it
+  // later); anything else stops it. Time runs out at the deadline on screen, and graceSeconds later in the room.
   sync(wait = 0) {
     const ms = this.match.state, of = ms.phase === 'turn' || ms.phase === 'choose' ? ms.phase : '', key = of && `${of} ${ms.turn}`;
     writeMatch(this.state, ms);
@@ -160,15 +165,19 @@ export class GolfRoom extends Room {
     this.timer = null;
     Object.assign(this.state.match, { clock: of, timeLeft: 0 });
     if (!of) return;
-    const length = (wait + (of === 'turn' ? this.turnSeconds : this.chooseSeconds)) * 1000;
-    this.timer = { key, deadline: Date.now() + length, expire: this.clock.setTimeout(() => this.timeUp(), length), tick: this.clock.setInterval(() => this.writeTimeLeft(), 1000) };
+    const deadline = Date.now() + (wait + (of === 'turn' ? this.turnSeconds : this.chooseSeconds)) * 1000;
+    this.timer = { key, deadline, closes: deadline + this.graceSeconds * 1000, tick: this.clock.setInterval(() => this.writeTimeLeft(), 1000) };
+    this.expireAt(this.timer.closes);
     this.writeTimeLeft();
   }
-  // Clients count down from this; writing it every second keeps a reloaded or lagging screen close
+  // Clients count down from this to the deadline; writing it every second keeps a reloaded or lagging screen close
   writeTimeLeft() { this.state.match.timeLeft = Math.max(0, Math.round(this.timer.deadline - Date.now())); }
-  // The room clock only ticks with each state patch, so its timeout can come a little after the deadline. Anything a
-  // player sends after the deadline is late however soon the timeout would have come.
-  checkClock() { if (this.timer && Date.now() >= this.timer.deadline) this.timeUp(); }
+  // Time is up at the moment at. The room clock only ticks with each state patch, and its first tick also counts the
+  // time from before a timeout was set, so the timeout can come a little early; then it waits on.
+  expireAt(at) { this.timer.expire = this.clock.setTimeout(() => (Date.now() < at ? this.expireAt(at) : this.timeUp()), at - Date.now()); }
+  // The timeout can also come a little late. Anything a player sends after the time is up is late however soon the
+  // timeout would have come.
+  checkClock() { if (this.timer && Date.now() >= this.timer.closes) this.timeUp(); }
   // The shot clock ran out: the turn passes with a penalty stroke, or the rifle bullet nearest the cup counts
   timeUp() {
     const ms = this.match.state, turn = ms.turn;
