@@ -17,7 +17,7 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 5 | Game server with private rooms | `3feb680` |
 | 6 | Online menu, lobby and invite links | `f3e2ae2` |
 | 7 | The server runs the match | `51c8609` |
-| 8 | Shots decided by the server | done (hash added with step 9) |
+| 8 | Shots decided by the server | `b45f3b0`, refusals and instant gunfire in the next commit |
 | 9 | Shot clock | to do |
 | 10 | Disconnects and reconnecting | to do |
 | 11 | Between holes and the end | to do |
@@ -65,7 +65,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
   screen are display copies that catch up at the same moments as in the one-screen game.
 - Input checks live in the match: wrong turn, weapon not an integer 0–7, yaw or pitch not finite, power outside
   0.04–1 and a second shot in the same turn are rejected without changing anything. Pitch outside the weapon's limits
-  is clamped to the limit rather than rejected, so a client's rounding can never make a valid shot fail.
+  is clamped to the limit rather than rejected, so a client's rounding can never make a valid shot fail. The shooter
+  is told why a shot was refused and can aim again.
 - Hits are checked where players stand (the layout from the match), and knock-backs start from their ball. The one
   difference from the old game: a character still walking into place is hit where they are heading, not mid-walk.
 - Turn order is round-robin, as before; the lowest score on the previous hole tees off first, seat order breaks ties.
@@ -232,25 +233,29 @@ phone-sized screen over the Wi-Fi address) see the same match, wind, hole card a
 shooter has the golf bag; both spectators' cameras sit at the same spot; reloading a spectator and then the shooter
 restores the same view; a new tab with the invite link is still turned away. The one-screen playtest still passes.*
 
-**8. Shots decided by the server** · done
+**8. Shots decided by the server** · `b45f3b0`, then a follow-up
 - Messages (listed in `src/core/protocol.js`):
   - client → server: `shoot {weapon, yaw, pitch, power}`, `chooseBullet {k}`, `replayDone {turn}`
   - server → clients: `shotResult {turn, shooter, aim, shot, result}`, with the whole `simulateShot` result (per
     projectile: launch, start and end step, result, path, final, rest; the events; the outcome) and the match's result.
-    New: `bulletChosen {turn, k, result}` tells everyone which rifle bullet the shooter picked.
+    New: `bulletChosen {turn, k, result}` tells everyone which rifle bullet the shooter picked, and
+    `shotRejected {reason}` tells the shooter alone why a shot was turned down.
 - Both results are sent just after the state patch with the change (`afterNextPatch`), so a client's room state already
   has the shot when its result arrives: the match on screen is ahead of the display copies, as on one screen.
 - The room only finds the sender's seat; `match.shoot` and `match.chooseBullet` turn anything else down without a
-  change and nothing is sent back. A client that plays fair never sends a shot the match refuses, and if the server
-  has moved on meanwhile, the room state shows it.
+  change. A refused shot is answered with `shotRejected {reason}` (the match's error), after the next state patch so
+  the shooter's screen knows where the match stands: it says why ("Too late: it is not your turn any more.", or "The
+  server could not take that shot. Aim and fire again.") and goes back to aiming if the turn is still theirs. Added
+  before the shot clock, since a refusal nobody hears about could quietly cost a stroke. A refused rifle choice gets
+  no answer: a fair client's choice is only refused once the choice has been made for it, and that result arrives.
 - Paths go as the bytes of a `Float32Array` in a `Uint8Array` (`packShot`, `unpackShot`): msgpack garbles a
   `Float32Array` itself, but carries a `Uint8Array` intact.
 - The next turn waits for every client that got the shot to send `replayDone`, at most until 10 seconds after the shot
   lands (after its flight, or after the rifle choice). A client that drops out is not waited for, and one that comes
   back does not count. `replayDone` sent while the shooter is still choosing counts. The room's `replayMargin` (10 s)
   can be shortened in tests.
-- On screen: `fire()` sends the shot and keeps the first-person view until the result arrives (one round trip), then
-  `playShot()` plays it in every window. Spectators get the chase camera from the start and an empty Fire button. In a
+- On screen: `fire()` plays the sound, recoil and muzzle flash at once and sends the shot; only the projectile waits
+  for the result (one round trip), with the view still first person. Then `playShot()` plays it in every window. Spectators get the chase camera from the start and an empty Fire button. In a
   rifle choice they see the numbered bullets and "Ann is picking the bullet that counts."; a choice that arrives
   before the bullets have landed on that screen is applied when they land.
 - A screen still showing the last shot when the server moves on (the 10 seconds ran out) skips to the end of it. A tab
@@ -261,12 +266,13 @@ restores the same view; a new tab with the invite link is still turned away. The
 - `PROTOCOL_VERSION` is now 3.
 
 *Test: integration tests turn down bad shots (wrong turn, not-a-number, power 5 and 0.01, weapon 9, 1.5 and −1, no
-aim at all, a second shot) without a change or a reply; check that every client gets the same shot as the server
+aim at all, a second shot) without a change, each answered with its reason to the shooter alone; check that every client gets the same shot as the server
 decided, after the state patch, with float32 paths; that the next turn waits for both screens, ignores a `replayDone`
 for another turn, gives up after the flight plus the margin, and does not wait for a player who drops out; that only
 the shooter picks the rifle bullet and every client learns which; that a hit moves the other player for every client;
 and that shot messages before the start are ignored. In headless Edge (Ann on a computer, Ben on a phone-sized screen
-over the Wi-Fi address): Ann's dart plays in both windows and ends where the server says; Ben's sniper hit knocks Ann
+over the Wi-Fi address): a shot with power 5 goes off at once on Ann's screen, is refused, and Ann is told why and
+aims again while Ben sees nothing; Ann's dart goes off before the server answers, then plays in both windows and ends where the server says; Ben's sniper hit knocks Ann
 back in both; Ann picks a rifle bullet while Ben sees the numbered bullets without buttons; with Ann's tab in the
 background and its animation paused, the next turn starts 0.1 s after Ben has watched his shot, and Ann's screen has
 already skipped to it. The step 7 browser test and the one-screen playtest still pass.*

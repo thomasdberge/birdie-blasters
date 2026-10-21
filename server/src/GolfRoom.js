@@ -117,12 +117,13 @@ export class GolfRoom extends Room {
   seatOf(client) { return this.state.seats[this.seatIndex(client)]; }
 
   // The current player fires. The match checks the aim and changes nothing when the shot is not allowed (not your turn,
-  // bad numbers, a second shot); the room only says which seat sent it.
+  // bad numbers, a second shot); the room only says which seat sent it. A refused shot is answered, after the next state
+  // patch, so the shooter's screen knows where the match stands when it hears why.
   shoot(client, aim) {
     if (!this.match) return;
     const { weapon, yaw, pitch, power } = aim ?? {}, ms = this.match.state, seat = this.seatIndex(client);
     const r = this.match.shoot(seat, { weapon, yaw, pitch, power });
-    if (r.error) return;
+    if (r.error) { client.send('shotRejected', { reason: r.error }, { afterNextPatch: true }); return; }
     writeMatch(this.state, ms);
     // Sent after the state patch, so a client's room state already has the shot when the result arrives
     this.broadcast('shotResult', { turn: ms.turn, shooter: seat, aim: { weapon, yaw, pitch, power }, shot: packShot(r.shot), result: r.result }, { afterNextPatch: true });

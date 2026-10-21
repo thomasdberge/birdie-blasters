@@ -21,11 +21,13 @@ export function readMatch(rs) {
 }
 
 // room: a joined room from the browser SDK. The server answers actions with messages (see src/core/protocol.js):
-// on.shot({ turn, shooter, aim, shot, result }) for every shot, on.chosen({ turn, k, result }) for a rifle choice.
+// on.shot({ turn, shooter, aim, shot, result }) for every shot, on.chosen({ turn, k, result }) for a rifle choice,
+// on.rejected({ reason }) when it turns this player's shot down.
 export function remoteMatch(room, on) {
   let shotTurn = -1, watchedTurn = -1;
   room.onMessage('shotResult', m => { shotTurn = m.turn; on.shot({ ...m, shot: unpackShot(m.shot) }); });
   room.onMessage('bulletChosen', m => on.chosen(m));
+  room.onMessage('shotRejected', m => on.rejected(m));
   return {
     get state() { return readMatch(room.state); },
     // The server decides; the shot comes back through on.shot

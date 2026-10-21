@@ -303,21 +303,28 @@ describe('shots', () => {
   const dartDown = { weapon: widx('dart'), yaw: 0, pitch: -60, power: 0.1 };
   const towardCup = M => Math.atan2(M.cup.x - M.tee.x, M.cup.z - M.tee.z);
 
-  test('bad shots are turned down and change nothing; so is a second shot in the same turn', async () => {
+  test('bad shots are turned down with the reason, to the shooter alone, and change nothing; so is a second shot', async () => {
     const [ann, ben] = await startGame('Ann', 'Ben');
     const room = serverRoom(ann), before = JSON.stringify(room.match.state), got = [received(ann, 'shotResult'), received(ben, 'shotResult')];
+    const refused = { ann: received(ann, 'shotRejected'), ben: received(ben, 'shotRejected') };
     const good = botAim(room.match.state);
     ben.send('shoot', good); // not his turn
-    for (const bad of [{ ...good, yaw: NaN }, { ...good, pitch: 'up' }, { ...good, power: 5 }, { ...good, power: 0.01 }, { ...good, weapon: 9 },
-      { ...good, weapon: 1.5 }, { ...good, weapon: -1 }, { yaw: 0 }, null, 'fire', [1, 2, 3]]) ann.send('shoot', bad);
-    await wait(200);
+    const bad = [[{ ...good, yaw: NaN }, 'bad aim'], [{ ...good, pitch: 'up' }, 'bad aim'], [{ ...good, power: 5 }, 'bad power'],
+      [{ ...good, power: 0.01 }, 'bad power'], [{ ...good, weapon: 9 }, 'bad weapon'], [{ ...good, weapon: 1.5 }, 'bad weapon'],
+      [{ ...good, weapon: -1 }, 'bad weapon'], [{ yaw: 0 }, 'bad weapon'], [null, 'bad weapon'], ['fire', 'bad weapon'], [[1, 2, 3], 'bad weapon']];
+    for (const [aim] of bad) ann.send('shoot', aim);
+    await untilTrue(() => refused.ann.length === bad.length && refused.ben.length === 1, 'every bad shot is answered');
+    expect(refused.ann.map(m => m.reason)).toEqual(bad.map(([, reason]) => reason));
+    expect(refused.ben).toEqual([{ reason: 'not your turn' }]);
     expect(JSON.stringify(room.match.state)).toBe(before);
     expect(got.flat()).toEqual([]);
     expect(ann.connection.isOpen && ben.connection.isOpen).toBe(true); // turned down, not thrown out
     ann.send('shoot', good); ann.send('shoot', good);
-    await untilTrue(() => got.every(g => g.length === 1), 'the shot reaches both');
+    await untilTrue(() => got.every(g => g.length === 1) && refused.ann.length === bad.length + 1, 'the shot reaches both and the second is refused');
     await wait(200);
     expect(got.map(g => g.length)).toEqual([1, 1]);
+    expect(refused.ann.at(-1)).toEqual({ reason: 'not your turn' });
+    expect(refused.ben.length).toBe(1);
     expect(room.match.state.seats[0].strokes).toBe(1);
   });
 

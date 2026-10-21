@@ -1,20 +1,24 @@
 // Plays an online match on screen. The server runs the match and the room state says where it stands; the screen shows
 // it through the same display copies as the one-screen game, and plays each shot when its result arrives.
 
+import { SHOT_REJECTED } from '../core/protocol.js';
 import { labelFont } from '../platform.js';
 import { remoteMatch } from '../net/remoteMatch.js';
-import { playShot, showChoice } from './shot.js';
+import { aimAgain, playShot, showChoice } from './shot.js';
 import { game, state, timers } from './state.js';
 import { beginTurn, endHole, leaveGame, setPlayers, showHole } from './turns.js';
 import { removeShotVisuals } from '../render/projectiles.js';
 import { ui } from '../ui/elements.js';
+import { toast } from '../ui/hud.js';
 
 let room = null, ready = false, shown = null;
 // room: a joined room whose game has started
 export async function playOnline(joined) {
   room = joined; ready = false; shown = { hole: -1, turn: -1, over: false };
   const live = () => ready && room === joined;
-  game.match = remoteMatch(room, { shot: m => { if (live()) shotArrived(m); }, chosen: m => { if (live()) choiceArrived(m); } });
+  game.match = remoteMatch(room, {
+    shot: m => { if (live()) shotArrived(m); }, chosen: m => { if (live()) choiceArrived(m); }, rejected: m => { if (live()) shotRejected(m); }
+  });
   game.online = { seat: [...room.state.seats].findIndex(s => s.sessionId === room.sessionId) };
   await labelFont();
   if (room !== joined) return; // the room was left while the font loaded
@@ -51,3 +55,12 @@ function shotArrived(m) {
   if (document.hidden) game.match.next();
 }
 function choiceArrived(m) { if (state.shot && m.turn === shown.turn) showChoice(m.k, m.result); }
+
+// The server turned this player's shot down. It answers after the state patch, so the room state says whether the turn
+// is still theirs; if it is not, the screen moves on with the room state.
+function shotRejected(m) {
+  if (state.phase !== 'flight' || state.shot) return; // not waiting for a shot of its own
+  toast(SHOT_REJECTED[m.reason] || SHOT_REJECTED.other);
+  const ms = game.match.state;
+  if (ms.phase === 'turn' && ms.cur === game.online.seat) aimAgain();
+}

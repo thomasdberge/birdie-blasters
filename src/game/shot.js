@@ -3,7 +3,7 @@
 
 import { HOLES } from '../core/courses.js';
 import { strokeCap } from '../core/match.js';
-import { BALL_R, STEP } from '../core/physics.js';
+import { BALL_R, launchState, STEP } from '../core/physics.js';
 import { CHAR_S, golfTerm } from '../core/rules.js';
 import { SAMPLE_HZ } from '../core/shot.js';
 import { WEAPONS } from '../core/weapons.js';
@@ -21,6 +21,7 @@ import { ui } from '../ui/elements.js';
 import { SURF_NAME } from '../ui/format.js';
 import { callout, setControls, setFill, toast, updateHUD } from '../ui/hud.js';
 import { exitLock, mouseMode } from '../ui/pointerLock.js';
+import { invalidateReticle } from '../ui/reticle.js';
 
 const SAMPLE_EVERY = Math.round(1 / (STEP * SAMPLE_HZ)); // simulation steps between recorded path samples
 
@@ -39,9 +40,15 @@ function fire(power) {
   const pi = state.cur, aim = { weapon: state.weapon, yaw: state.yaw, pitch: state.pitch, power };
   const { shot, result } = game.match.shoot(pi, aim);
   if (shot) { playShot(pi, aim, shot, result); return; }
-  // Online the server decides the shot, and playback starts when it arrives. Until then the view stays first person.
+  // Online the server decides the shot. The gun goes off now; the projectile follows when the result arrives, and the
+  // view stays first person until then.
   state.phase = 'flight'; state.shot = null; setControls(false); setFill(power);
   ui.fireSub.textContent = Math.round(power * 100) + '%';
+  gunfire(pi, aim, launchState(WEAPONS[aim.weapon], power, aim.yaw, aim.pitch, state.players[pi].ball));
+}
+// Online the server turned this player's shot down: aim again, if it is still their turn
+export function aimAgain() {
+  state.phase = 'aim'; setControls(true); setFill(0); invalidateReticle();
 }
 // Plays a shot the match has decided. pi: the shooter's seat · aim: what they fired · shot, result: from match.shoot
 export function playShot(pi, aim, shot, result) {
@@ -54,11 +61,16 @@ export function playShot(pi, aim, shot, result) {
   // step: simulation steps played so far · next: the next event to show · hit: someone was hit
   state.shot = { W, shooter: pi, age: 0, acc: 0, step: 0, next: 0, events: shot.events, outcome: shot.outcome, result, hit: false, active: true, color: p.color, projs, primary: 0 };
   projs.forEach(q => { q.vis.g.visible = false; placeProjectile(q, 0); });
+  if (!game.online || !playsSeat(pi)) gunfire(pi, aim, projs[0].b); // online the shooter's own gun went off when they fired
+}
+// Sound, recoil and muzzle flash. b: the launch state of the first projectile, for where the barrel points
+function gunfire(pi, aim, b) {
+  const p = state.players[pi], W = WEAPONS[aim.weapon];
   cam.hdir.set(Math.sin(aim.yaw), 0, Math.cos(aim.yaw));
   p.char.recoil = W.id === 'bazooka' || W.id === 'shotgun' ? 1 : 0.6; p.char.ring.visible = false;
   vm.recoil = { dart: 0.5, auto: 0.45, pistol: 0.6, flare: 0.7 }[W.id] || 1; setZoom(false);
   sfx.shot(W.id);
-  const b = projs[0].b, sp = Math.hypot(b.vx, b.vy, b.vz) || 1, ux = b.vx / sp, uy = b.vy / sp, uz = b.vz / sp;
+  const sp = Math.hypot(b.vx, b.vy, b.vz) || 1, ux = b.vx / sp, uy = b.vy / sp, uz = b.vz / sp;
   // Muzzle flash a little ahead of the eye so it does not fill the first-person view
   const flash = W.id === 'dart' ? 0xf2eed6 : W.id === 'flare' ? 0xff3b5c : 0xffc04d;
   for (let k = 0; k < 8; k++) spawn({ x: b.x + ux * 1.2, y: b.y + uy * 1.2, z: b.z + uz * 1.2, vx: ux * 3 + (Math.random() - 0.5) * 2, vy: uy * 3 + Math.random(), vz: uz * 3 + (Math.random() - 0.5) * 2, size: 0.12, grow: 0.8, life: 0.25, color: flash, opacity: 0.9, drag: 4 });

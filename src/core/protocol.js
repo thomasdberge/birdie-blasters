@@ -6,8 +6,14 @@ export const PROTOCOL_VERSION = 3;
 export const ROOM_NAME = 'golf';
 
 // Messages. Client → server: start · shoot { weapon, yaw, pitch, power } · chooseBullet { k } · replayDone { turn }.
-// Server → clients: shotResult { turn, shooter, aim, shot (packShot), result } · bulletChosen { turn, k, result }.
-// The room state (server/src/state.js) has everything else.
+// Server → clients: shotResult { turn, shooter, aim, shot (packShot), result } · bulletChosen { turn, k, result } ·
+// shotRejected { reason } to the shooter alone. The room state (server/src/state.js) has everything else.
+
+// What the shooter is told when the server turns a shot down. reason is match.shoot's error.
+export const SHOT_REJECTED = {
+  'not your turn': 'Too late: it is not your turn any more.',
+  other: 'The server could not take that shot. Aim and fire again.'
+};
 
 // A shot from simulateShot (src/core/shot.js) as shotResult carries it. Flight paths only animate the shot, so float32
 // is plenty and halves their size. msgpack garbles a Float32Array but carries its bytes intact as a Uint8Array.
