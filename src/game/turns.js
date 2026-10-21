@@ -1,7 +1,7 @@
 // Hole and turn flow on screen. The match decides whose turn it is and when a hole ends; this shows it.
 
 import { HOLES } from '../core/courses.js';
-import { makeMatch } from '../core/match.js';
+import { makeMatch, strokeCap } from '../core/match.js';
 import { WEAPONS, widx } from '../core/weapons.js';
 import { holds, setZoom } from './aim.js';
 import { cancelCharge } from './shot.js';
@@ -15,8 +15,8 @@ import { vm } from '../render/viewmodel.js';
 import { buildWorld } from '../render/world.js';
 import { openPick } from '../ui/bag.js';
 import { ui } from '../ui/elements.js';
-import { fmt1 } from '../ui/format.js';
-import { setControls, setFill, showBanner, updateHUD } from '../ui/hud.js';
+import { fmt1, genitive } from '../ui/format.js';
+import { callout, setControls, setFill, showBanner, turnAlert, updateHUD } from '../ui/hud.js';
 import { buildMapStatic, sizeMap } from '../ui/minimap.js';
 import { exitLock } from '../ui/pointerLock.js';
 import { showBoard } from '../ui/scorecard.js';
@@ -52,7 +52,7 @@ export function newGame(names) {
 }
 // Back to the start screen
 export function leaveGame() {
-  timers.length = 0; state.waitFn = null;
+  timers.length = 0; state.waitFn = null; turnAlert(false);
   cancelCharge(); exitLock(); holds.clear();
   state.players.forEach(p => { p.char.group.visible = false; });
   ui.board.hidden = true; ui.hud.hidden = true; ui.setup.hidden = false; state.phase = 'setup';
@@ -105,7 +105,21 @@ export function beginTurn() {
   vm.handMat.color.set(p.color);
   setZoom(false); state.zoomF = 1.001;
   updateHUD();
-  if (playsSeat(i) && ms.phase === 'turn') openPick(true); else watchTurn();
+  const mine = playsSeat(i) && ms.phase === 'turn';
+  if (mine) openPick(true); else watchTurn();
+  turnAlert(mine && !!game.online);
+}
+// Online: the shot clock ran out on seat's turn. It passes with a penalty stroke (result from match.timeout).
+export function turnTimedOut(seat, result) {
+  const p = state.players[seat];
+  turnAlert(false); cancelCharge(); setZoom(false); exitLock(); holds.clear();
+  ui.pick.hidden = true; ui.hud.classList.remove('picking'); setControls(false); setFill(0);
+  state.phase = 'settle'; state.shot = null;
+  showSeat(seat); updateHUD();
+  callout('TIME’S UP!', `+1 stroke. ${genitive(p.name)} turn passes.`, p.color);
+  let delay = 1.8;
+  if (result.picked) { later(delay, () => callout('PICKED UP', `Max ${strokeCap(state.holeIdx)} strokes on this hole`, p.color)); delay += 1.6; }
+  later(delay, nextTurn);
 }
 // Someone else's turn, online: no golf bag for you. The camera watches over the shooter's shoulder, and they hold the
 // weapon the bag recommends.

@@ -17,8 +17,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 5 | Game server with private rooms | `3feb680` |
 | 6 | Online menu, lobby and invite links | `f3e2ae2` |
 | 7 | The server runs the match | `51c8609` |
-| 8 | Shots decided by the server | `b45f3b0`, refusals and instant gunfire in the next commit |
-| 9 | Shot clock | to do |
+| 8 | Shots decided by the server | `b45f3b0`, `db90594` |
+| 9 | Shot clock | done (hash added with step 10) |
 | 10 | Disconnects and reconnecting | to do |
 | 11 | Between holes and the end | to do |
 | 12 | Live aim for spectators | to do |
@@ -75,11 +75,19 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 
 ### Shot clock and timeouts
 
-- 30 seconds per turn, timed on the server, starting when the golf bag opens.
+- 30 seconds per turn, timed on the server, starting when the turn begins (the golf bag opens then).
 - Running out of time costs one stroke and passes the turn. Without the penalty, a player who never shoots would block
   the hole forever, since a hole only ends when everyone has holed out or reached par + 5.
 - The assault rifle keeps "pick which bullet counts". That needs one extra message (`chooseBullet`) besides weapon,
-  yaw, pitch and power. The choice has its own 15 seconds; after that the bullet nearest the cup counts.
+  yaw, pitch and power. The choice has its own 15 seconds, counted from when the bullets have landed (the room adds
+  the flight time); after that the bullet nearest the cup counts.
+- A shot carries the turn it was fired in, and the room turns down a shot meant for another turn. Otherwise a late
+  shot from a turn that just timed out could count in the next one when the same player has it (the last player left
+  on a hole).
+- The deadline is exact: a shot after it is refused as too late ("Too late: your time ran out.") even if the room clock,
+  which only ticks with each state patch, has not fired yet.
+- The time left is in the room state, written when the clock starts and about once a second. Each screen counts down
+  from the last value it got, so a reloaded or lagging screen is right again within a second.
 - **Turn alert:** when it becomes your turn, a short sound plays and the browser tab title shows "Your turn!" until you
   act (pick a weapon) or the turn passes, so players who look away don't lose strokes to the shot clock.
 
@@ -136,7 +144,7 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
 | Too many new rooms from one IP | 429 | Too many new rooms from your network. Try again in a few minutes. |
 | Room mode other than private | 400 | Only private rooms are available |
 
-- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 3) is raised whenever messages or room state change in a way an
+- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 4) is raised whenever messages or room state change in a way an
   older client cannot handle.
 - Colyseus disconnects a client that sends a message type the room has no handler for, so a client never sends a
   message before the server handles it.
@@ -233,7 +241,7 @@ phone-sized screen over the Wi-Fi address) see the same match, wind, hole card a
 shooter has the golf bag; both spectators' cameras sit at the same spot; reloading a spectator and then the shooter
 restores the same view; a new tab with the invite link is still turned away. The one-screen playtest still passes.*
 
-**8. Shots decided by the server** · `b45f3b0`, then a follow-up
+**8. Shots decided by the server** · `b45f3b0`, follow-up `db90594`
 - Messages (listed in `src/core/protocol.js`):
   - client → server: `shoot {weapon, yaw, pitch, power}`, `chooseBullet {k}`, `replayDone {turn}`
   - server → clients: `shotResult {turn, shooter, aim, shot, result}`, with the whole `simulateShot` result (per
@@ -277,18 +285,34 @@ back in both; Ann picks a rifle bullet while Ben sees the numbered bullets witho
 background and its animation paused, the next turn starts 0.1 s after Ben has watched his shot, and Ann's screen has
 already skipped to it. The step 7 browser test and the one-screen playtest still pass.*
 
-**9. Shot clock**
-- 30 seconds per turn on the room clock (`this.clock.setTimeout`), starting when the turn begins. The rifle choice gets
-  its own 15 seconds.
-- The server sends the time left at the start of each turn and the HUD counts down, with the last 5 seconds
-  highlighted. When time runs out, the room calls `match.timeout()`.
-- A shot that arrives after the deadline is rejected.
-- Turn alert: when the new turn is yours, play a short sound and set the tab title to "Your turn!"; put the title back
-  when you pick a weapon or the turn passes.
+**9. Shot clock** · done
+- The room's `sync()` copies the match into the room state and starts the clock whenever a turn or a rifle choice
+  begins: 30 seconds for a turn, flight time plus 15 seconds for a choice (`this.clock.setTimeout`); anything else
+  stops it. `match.clock` says what it times (`turn`, `choose` or empty) and `match.timeLeft` the milliseconds left,
+  written at the start and every second.
+- When a turn's time runs out, the room calls `match.timeout()` and sends `timeUp {turn, seat, result}`; every screen
+  shows "TIME’S UP! +1 stroke. Ann’s turn passes.", the shooter's golf bag and controls close, and the next turn waits
+  for `replayDone` as after a shot. When a rifle choice runs out, the bullet nearest the cup counts: `bulletChosen`
+  with `timeUp: true`, and screens say "Time’s up: the bullet nearest the cup counts."
+- `shoot` carries `turn`. A shot for another turn is refused with `not your turn`, a shot after the deadline with
+  `time`. Each room has `turnSeconds` and `chooseSeconds`, which tests shorten.
+- The clock sits on the hole card next to the current player's name, in whole seconds, red and beating for the last 5.
+  It shows for the turn while the golf bag is open, while aiming and while watching, and for a rifle choice once the
+  bullets have landed on that screen; not while a shot flies.
+- Turn alert: when a turn becomes yours, a two-note sound plays and the tab title says "Your turn!" until you pick a
+  weapon or the turn passes. A tab in the background reports a time-up at once, as it does a shot.
+- `PROTOCOL_VERSION` is now 4.
 
-*Test: with the room clock advanced in tests, no shot passes the turn at 30 s; a shot at 29.9 s counts and one at 30.1 s
-is rejected; the countdowns in two windows agree within half a second; with the window in the background, your turn
-plays the sound and shows "Your turn!" in the tab title, which goes back once you pick a weapon.*
+*Test: integration tests (with the clock shortened per room) check that the clock starts with every turn, counts down
+in the room state and stops when the shot is fired; that a turn with no shot passes with a penalty stroke and everyone
+is told; that a shot 0.1 s before the deadline counts and one 0.1 s after is refused as `time` while the turn passes;
+and that an unmade rifle choice takes the bullet nearest the cup after the flight plus the choice time. In headless
+Edge (Ann on a computer, Ben on a phone-sized screen over the Wi-Fi address): only the player whose turn it is gets the
+sound and "Your turn!", which goes once they pick a weapon; both countdowns agree within 0.2 s at the start and at
+4.5 s; the last seconds are red in both; when Ann's 30 seconds run out both see TIME’S UP and Ann has a penalty stroke;
+no clock shows while a shot flies; Ann's tab in the background with its animation paused still gets "Your turn!" and
+the sound, and keeps the title until she picks. The step 7 and 8 browser tests and the one-screen playtest still
+pass.*
 
 **10. Disconnects and reconnecting**
 - `onDrop` already holds the seat for 60 seconds (step 7). Now it also calls `match.setConnected(seat, false)`, and
@@ -373,4 +397,7 @@ limit.
   cannot launch it. Start headless Edge from PowerShell with `--remote-debugging-port=9333` (plus
   `--enable-unsafe-swiftshader --use-angle=swiftshader` for WebGL) and `puppeteer.connect` to it.
 - Tests that import game modules inside the page must import the exact URL the page loaded: after an edit, Vite serves
-  the module as `…?t=…`, and a plain import makes a second, unused copy.
+  the module as `…?t=…`, and a plain import makes a second, unused copy. Once, a test started seconds after an edit
+  still got a stale copy; if a hook reads nothing, run the test again.
+- Since the shot clock, a turn passes after 30 seconds, also in browser tests. Software rendering is slow, so tests must
+  not assume the game stays on one turn while they wait (the step 7 and 8 tests check against whatever turn it is).

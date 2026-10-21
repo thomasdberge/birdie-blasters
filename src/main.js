@@ -4,9 +4,9 @@ import * as THREE from 'three';
 import { STEP } from './core/physics.js';
 import { $ } from './platform.js';
 import { applyHolds, holds } from './game/aim.js';
-import { initOnline } from './game/online.js';
+import { initOnline, shotClockLeft } from './game/online.js';
 import { playShotStep } from './game/shot.js';
-import { clock, distToCup, state, timers, world } from './game/state.js';
+import { clock, distToCup, game, state, timers, world } from './game/state.js';
 import { cam, fpView, updateCamera } from './render/camera.js';
 import { charsSettled, updateChar } from './render/characters.js';
 import { updateParts } from './render/particles.js';
@@ -17,7 +17,7 @@ import { updateViewmodel } from './render/viewmodel.js';
 import { animateWorld, buildWorld } from './render/world.js';
 import { initBag } from './ui/bag.js';
 import { ui } from './ui/elements.js';
-import { setFill, updateWindHUD } from './ui/hud.js';
+import { setClock, setFill, updateWindHUD } from './ui/hud.js';
 import { initInput } from './ui/input.js';
 import { initLobby } from './ui/lobby.js';
 import { buildMapStatic, drawMap, sizeMap } from './ui/minimap.js';
@@ -58,7 +58,7 @@ function frame(now) {
   for (const p of state.players) p.char.label.scale.set(0.15 * inv, 0.0375 * inv, 1);
   if (world.flag) world.flag.marker.scale.set(0.05 * inv, 0.05 * inv, 1);
   updateReticle();
-  if (inGame) { updateWindHUD(); updateLandMark(); updateLockUI(); }
+  if (inGame) { updateWindHUD(); updateLandMark(); updateLockUI(); setClock(game.online ? shotClockLeft() : null); }
   if (inGame && (mapTick++ % 2 === 0)) drawMap();
   if (state.phase === 'aim' && (mapTick % 6 === 0)) { const p = state.players[state.cur]; if (p) $('#hcDist').textContent = Math.round(distToCup(p)); }
   renderer.clear();

@@ -11,7 +11,7 @@ import { showWeapon } from '../render/characters.js';
 import { vmShow } from '../render/viewmodel.js';
 import { ui } from './elements.js';
 import { fmt1, genitive, SURF_NAME } from './format.js';
-import { setControls, setHint, windText } from './hud.js';
+import { setControls, setHint, turnAlert, windText } from './hud.js';
 import { exitLock, mouseMode, requestLock } from './pointerLock.js';
 import { invalidateReticle } from './reticle.js';
 
@@ -58,7 +58,7 @@ export function openPick(fresh) {
 }
 export function confirmPick(i) {
   if (state.phase !== 'pick') return;
-  sfx.unlock();
+  sfx.unlock(); turnAlert(false);
   selectWeapon(i);
   ui.pick.hidden = true; ui.hud.classList.remove('picking');
   state.phase = 'aim'; setControls(true); invalidateReticle();

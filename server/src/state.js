@@ -22,13 +22,17 @@ export const Seat = schema({
   scores: t.array('uint8') // one per hole, 0 while not played (a real score is at least 1)
 }, 'Seat');
 
-// Where the match stands (src/core/match.js): its phase, the hole, the turn count, whose turn it is (-1: nobody's), the wind
+// Where the match stands (src/core/match.js): its phase, the hole, the turn count, whose turn it is (-1: nobody's), the
+// wind. The shot clock is the room's: clock is what it times ('turn', 'choose' for a rifle choice, '' when it is
+// stopped) and timeLeft the milliseconds left when it was last written, about once a second.
 export const Match = schema({
   phase: t.string().default(''),
   hole: t.uint8().default(0),
   turn: t.uint32().default(0),
   cur: t.int8().default(-1),
-  wind: t.ref(Wind)
+  wind: t.ref(Wind),
+  clock: t.string().default(''),
+  timeLeft: t.uint32().default(0)
 }, 'Match');
 
 // phase: 'lobby' while players gather, 'playing' once the host has started

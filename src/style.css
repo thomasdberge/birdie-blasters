@@ -47,6 +47,10 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
 .hc-name{display:block;font-family:var(--font-display);font-size:20px;line-height:1.1;color:var(--cream)}
 .hc-player{display:flex;align-items:center;gap:8px;font-weight:600;font-size:15px;margin-top:5px;min-width:0}
 .hc-player span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Online shot clock: seconds left for the player on the card; the last five are red */
+.hc-player .hc-clock{margin-left:auto;flex:none;overflow:visible;min-width:2.6em;text-align:center;font-family:var(--font-data);font-weight:700;font-size:15px;font-variant-numeric:tabular-nums;color:var(--cream);background:var(--olive-2);border-radius:999px;padding:1px 8px}
+.hc-player .hc-clock.urgent{background:#e8322b;color:#fff;animation:clockbeat 1s ease-out infinite}
+@keyframes clockbeat{0%{transform:scale(1.18)}35%{transform:scale(1)}}
 .chip{width:12px;height:12px;border-radius:50%;flex:none;background:var(--blaze);box-shadow:0 0 0 2px var(--olive),0 0 0 3.5px var(--cream)}
 .hc-stats{display:flex;gap:12px;font-family:var(--font-data);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:1px}
 .hc-stats b{font-size:17px;color:var(--cream);font-weight:700}
@@ -220,4 +224,5 @@ table.sc{width:100%;border-collapse:collapse;font-family:var(--font-data);font-v
   .callout.show{animation:fade 2.6s linear forwards}
   @keyframes fade{0%{opacity:0}8%{opacity:1}85%{opacity:1}100%{opacity:0}}
   .banner,.toast{transition:none}
+  .hc-player .hc-clock.urgent{animation:none}
 }

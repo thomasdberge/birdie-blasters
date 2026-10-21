@@ -12,6 +12,8 @@ import { GolfState, Seat, writeMatch } from './state.js';
 export const RECONNECT_SECONDS = 60;
 // After a shot has landed, how long the next turn waits at most for a screen that is still showing it
 export const REPLAY_MARGIN = 10;
+// The shot clock: seconds for a turn, and for picking the rifle bullet that counts
+export const TURN_SECONDS = 30, CHOOSE_SECONDS = 15;
 
 // At most CREATE_LIMIT new rooms per IP address in any CREATE_WINDOW_MS
 export const CREATE_LIMIT = 10, CREATE_WINDOW_MS = 10 * 60 * 1000;
@@ -52,7 +54,10 @@ const reject = r => new ServerError(r.code, r.message);
 export class GolfRoom extends Room {
   maxClients = MAX_SEATS;
   state = new GolfState();
-  replayMargin = REPLAY_MARGIN; // seconds; tests make it shorter
+  // Seconds; tests make them shorter
+  replayMargin = REPLAY_MARGIN;
+  turnSeconds = TURN_SECONDS;
+  chooseSeconds = CHOOSE_SECONDS;
 
   // Runs for every matchmaking request (create, join by code), before a room is made or a seat reserved
   static async onAuth(token, options, context) {
@@ -116,38 +121,81 @@ export class GolfRoom extends Room {
   seatIndex(client) { return this.state.seats.findIndex(s => s.sessionId === client.sessionId); }
   seatOf(client) { return this.state.seats[this.seatIndex(client)]; }
 
-  // The current player fires. The match checks the aim and changes nothing when the shot is not allowed (not your turn,
-  // bad numbers, a second shot); the room only says which seat sent it. A refused shot is answered, after the next state
-  // patch, so the shooter's screen knows where the match stands when it hears why.
+  // The current player fires; aim.turn is the turn they fired in. The match checks the aim and changes nothing when the
+  // shot is not allowed (bad numbers, not your turn, a second shot); the room only says which seat sent it, and turns
+  // down a shot meant for another turn. A refused shot is answered after the next state patch, so the shooter's screen
+  // knows where the match stands when it hears why.
   shoot(client, aim) {
     if (!this.match) return;
-    const { weapon, yaw, pitch, power } = aim ?? {}, ms = this.match.state, seat = this.seatIndex(client);
-    const r = this.match.shoot(seat, { weapon, yaw, pitch, power });
-    if (r.error) { client.send('shotRejected', { reason: r.error }, { afterNextPatch: true }); return; }
-    writeMatch(this.state, ms);
+    this.checkClock();
+    const ms = this.match.state, seat = this.seatIndex(client), { weapon, yaw, pitch, power, turn } = aim ?? {};
+    const r = turn === ms.turn ? this.match.shoot(seat, { weapon, yaw, pitch, power }) : { error: 'not your turn' };
+    const late = Number.isInteger(turn) && turn === this.timedOut;
+    if (r.error) { client.send('shotRejected', { reason: late ? 'time' : r.error }, { afterNextPatch: true }); return; }
+    this.sync(r.shot.steps * STEP); // a rifle choice is timed from when the bullets have landed
     // Sent after the state patch, so a client's room state already has the shot when the result arrives
     this.broadcast('shotResult', { turn: ms.turn, shooter: seat, aim: { weapon, yaw, pitch, power }, shot: packShot(r.shot), result: r.result }, { afterNextPatch: true });
-    this.replay = { turn: ms.turn, waiting: new Set(this.clients.map(c => c.sessionId)), timer: null };
+    this.watchFrom(ms.turn);
     if (ms.phase === 'settle') this.settled(r.shot.steps * STEP);
   }
 
   // The assault rifle's shooter picks the bullet that counts
   chooseBullet(client, msg) {
     if (!this.match) return;
+    this.checkClock();
     const ms = this.match.state, k = msg?.k, r = this.match.chooseBullet(this.seatIndex(client), k);
     if (r.error) return;
-    writeMatch(this.state, ms);
+    this.sync();
     this.broadcast('bulletChosen', { turn: ms.turn, k, result: r.result }, { afterNextPatch: true });
     this.settled(0);
   }
 
-  // The shot has landed (after seconds of flight still to watch). The next turn waits for everyone who got the shot to
-  // say they have watched it (replayDone), but no more than replayMargin seconds after it lands.
+  // Copies the match into the room state, and starts the shot clock when a turn or a rifle choice begins (wait seconds
+  // later); anything else stops it
+  sync(wait = 0) {
+    const ms = this.match.state, of = ms.phase === 'turn' || ms.phase === 'choose' ? ms.phase : '', key = of && `${of} ${ms.turn}`;
+    writeMatch(this.state, ms);
+    if (key === (this.timer?.key ?? '')) return;
+    this.timer?.expire.clear(); this.timer?.tick.clear();
+    this.timer = null;
+    Object.assign(this.state.match, { clock: of, timeLeft: 0 });
+    if (!of) return;
+    const length = (wait + (of === 'turn' ? this.turnSeconds : this.chooseSeconds)) * 1000;
+    this.timer = { key, deadline: Date.now() + length, expire: this.clock.setTimeout(() => this.timeUp(), length), tick: this.clock.setInterval(() => this.writeTimeLeft(), 1000) };
+    this.writeTimeLeft();
+  }
+  // Clients count down from this; writing it every second keeps a reloaded or lagging screen close
+  writeTimeLeft() { this.state.match.timeLeft = Math.max(0, Math.round(this.timer.deadline - Date.now())); }
+  // The room clock only ticks with each state patch, so its timeout can come a little after the deadline. Anything a
+  // player sends after the deadline is late however soon the timeout would have come.
+  checkClock() { if (this.timer && Date.now() >= this.timer.deadline) this.timeUp(); }
+  // The shot clock ran out: the turn passes with a penalty stroke, or the rifle bullet nearest the cup counts
+  timeUp() {
+    const ms = this.match.state, turn = ms.turn;
+    if (ms.phase === 'turn') {
+      const seat = ms.cur, r = this.match.timeout();
+      this.timedOut = turn;
+      this.sync();
+      this.broadcast('timeUp', { turn, seat, result: r.result }, { afterNextPatch: true });
+      this.watchFrom(turn);
+      this.settled(0);
+    } else if (ms.phase === 'choose') {
+      const candidates = ms.choice.candidates.map(c => c.proj), r = this.match.timeout();
+      this.sync();
+      this.broadcast('bulletChosen', { turn, k: candidates.indexOf(r.proj), result: r.result, timeUp: true }, { afterNextPatch: true });
+      this.settled(0);
+    }
+  }
+
+  // Everyone in the room now is to watch what happened in this turn before the next one starts
+  watchFrom(turn) { this.replay = { turn, waiting: new Set(this.clients.map(c => c.sessionId)), timer: null }; }
+  // The turn has ended on screen (after seconds of flight still to watch). The next turn waits for everyone who saw it
+  // happen to say they have watched it (replayDone), but no more than replayMargin seconds after that.
   settled(seconds) {
     if (!this.replay.waiting.size) { this.nextTurn(); return; }
     this.replay.timer = this.clock.setTimeout(() => this.nextTurn(), (seconds + this.replayMargin) * 1000);
   }
-  // sessionId has watched the shot, or is gone
+  // sessionId has watched the end of the turn, or is gone
   watched(sessionId) {
     if (!this.replay) return;
     this.replay.waiting.delete(sessionId);
@@ -158,14 +206,14 @@ export class GolfRoom extends Room {
     this.replay?.timer?.clear();
     this.replay = null;
     this.match.next();
-    writeMatch(this.state, this.match.state);
+    this.sync();
   }
 
   async start(client) {
     if (this.state.phase !== 'lobby' || client.sessionId !== this.state.host || this.state.seats.length < this.state.minPlayers) return;
     // Seats keep their lobby order, so seat i in the room is seat i in the match
     this.match = makeMatch(this.state.seats.map(s => s.name), Math.random);
-    writeMatch(this.state, this.match.state);
+    this.sync();
     this.state.phase = 'playing';
     await this.lock(); // nobody joins a game in progress
   }

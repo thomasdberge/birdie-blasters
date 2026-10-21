@@ -3,6 +3,7 @@
 import { HOLES } from '../core/courses.js';
 import { WEAPONS } from '../core/weapons.js';
 import { $, COARSE } from '../platform.js';
+import { sfx } from '../audio/sfx.js';
 import { currentLie, distToCup, state, world } from '../game/state.js';
 import { ui } from './elements.js';
 import { fmt1 } from './format.js';
@@ -60,6 +61,23 @@ export function callout(big, small, color) {
   ui.coBig.textContent = big; ui.coBig.style.color = color || ''; ui.coSmall.textContent = small || '';
   ui.callout.classList.remove('show'); void ui.callout.offsetWidth; ui.callout.classList.add('show');
   clearTimeout(calloutTO); calloutTO = setTimeout(() => ui.callout.classList.remove('show'), 2700);
+}
+// Online: the shot clock on the hole card, ms left or null when there is none. Whole seconds, red for the last five.
+let clockShown = '';
+export function setClock(ms) {
+  const s = ms == null ? '' : String(Math.max(0, Math.ceil(ms / 1000)));
+  if (s === clockShown) return;
+  clockShown = s;
+  ui.clock.hidden = !s; ui.clock.textContent = s;
+  ui.clock.classList.toggle('urgent', !!s && +s <= 5);
+  ui.clock.setAttribute('aria-label', s ? `${s} seconds left` : '');
+}
+// Online, when it becomes your turn: a short sound, and "Your turn!" in the tab title until you act or the turn passes
+let pageTitle = null;
+export function turnAlert(on) {
+  if (pageTitle == null) pageTitle = document.title;
+  if (on && document.title !== 'Your turn!') sfx.yourTurn();
+  document.title = on ? 'Your turn!' : pageTitle;
 }
 export function toast(msg) { ui.toast.textContent = msg; ui.toast.classList.add('show'); clearTimeout(toastTO); toastTO = setTimeout(() => ui.toast.classList.remove('show'), 2400); }
 export function setFill(p) {

@@ -54,6 +54,7 @@ export const sfx = (() => {
     ding() { tone(1400, 1400, 0.55, 'sine', 0.25); tone(2100, 2100, 0.45, 'sine', 0.12, 0.02); noise(0.1, 'highpass', 2500, 0.4); },
     splash() { noise(0.8, 'bandpass', 900, 0.75, 0.6, 260); },
     cup() { tone(1046, 1046, 0.16, 'sine', 0.3); tone(1318, 1318, 0.16, 'sine', 0.3, 0.12); tone(1568, 1568, 0.32, 'sine', 0.3, 0.24); },
+    yourTurn() { tone(784, 784, 0.14, 'triangle', 0.35); tone(1175, 1175, 0.26, 'triangle', 0.35, 0.13); }, // online: your turn has come
     poof() { noise(0.2, 'bandpass', 2200, 0.16, 1.2); },
     miss() { tone(300, 150, 0.35, 'sawtooth', 0.08); }
   };
