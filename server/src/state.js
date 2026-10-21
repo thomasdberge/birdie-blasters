@@ -6,12 +6,14 @@ import { schema, t } from '@colyseus/schema';
 export const Point = schema({ x: t.float64().default(0), y: t.float64().default(0), z: t.float64().default(0) }, 'Point');
 export const Wind = schema({ x: t.float64().default(0), z: t.float64().default(0), dir: t.float64().default(0), speed: t.float64().default(0) }, 'Wind');
 
-// A seat at the table. style picks the character look (colour and hat).
+// A seat at the table. style picks the character look (colour and hat). reconnectLeft: the milliseconds a player who lost
+// the connection has left to come back, written when they drop and about once a second; 0 otherwise.
 // The rest is the match's seat once the game has started: see writeMatch.
 export const Seat = schema({
   sessionId: t.string(),
   name: t.string(),
   style: t.uint8(),
+  reconnectLeft: t.uint32().default(0),
   connected: t.boolean().default(true),
   ball: t.ref(Point),
   stand: t.ref(Point),
@@ -55,7 +57,7 @@ export function writeMatch(room, ms) {
     const seat = room.seats[i];
     setFields(seat.ball, s.ball);
     if (s.stand) setFields(seat.stand, s.stand);
-    seat.strokes = s.strokes; seat.done = s.done; seat.picked = s.picked; seat.out = s.out;
+    seat.strokes = s.strokes; seat.done = s.done; seat.picked = s.picked; seat.out = s.out; seat.connected = s.connected;
     s.scores.forEach((v, k) => { seat.scores[k] = v ?? 0; });
   });
 }

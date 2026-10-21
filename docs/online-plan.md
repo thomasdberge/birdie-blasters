@@ -18,8 +18,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 6 | Online menu, lobby and invite links | `f3e2ae2` |
 | 7 | The server runs the match | `51c8609` |
 | 8 | Shots decided by the server | `b45f3b0`, `db90594` |
-| 9 | Shot clock | `420b57b`, follow-up (hash added with step 10) |
-| 10 | Disconnects and reconnecting | to do |
+| 9 | Shot clock | `420b57b`, `7de49b9` |
+| 10 | Disconnects and reconnecting | done (hash added with step 11) |
 | 11 | Between holes and the end | to do |
 | 12 | Live aim for spectators | to do |
 | 13 | Game server on Fly.io | to do |
@@ -102,17 +102,23 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 - A dropped player keeps their seat for 60 seconds. Their turns are skipped without penalty; if it was their turn, it
   passes at once. They rejoin the rotation when they reconnect.
 - The client keeps its reconnection token in `sessionStorage` and reconnects by itself after a reload or a network
-  drop. Others see e.g. "Barry · reconnecting 0:42".
+  drop. Others see e.g. "Barry · reconnecting 0:42" under the hole card, and a short message when someone loses the
+  connection, comes back or leaves. The player whose connection is lost sees "You · reconnecting…" and cannot fire
+  meanwhile.
 - Only a game in progress holds seats. In the lobby a dropped connection frees the seat at once, as leaving does, and
-  the tab keeps no token.
-- Disconnecting during the rifle choice takes the bullet nearest the cup, as when time runs out.
-- Disconnected players can still be hit: their character is still standing on the course.
+  the tab keeps no token. So the lobby does not try to reconnect either: it says at once that the connection was lost.
+- Disconnecting or leaving during the rifle choice takes the bullet nearest the cup, as when time runs out.
+- Disconnected players can still be hit: their character is still standing on the course. A player who has left
+  disappears from the course and the minimap.
 - If everyone who still has to finish the hole is disconnected, the match waits (phase `waiting`) until one of them
-  reconnects or their seat expires.
+  reconnects or their seat expires. Screens say who they are waiting for.
 - After 60 seconds the player is out for the rest of the match: no more turns, "—" on the scorecard for the remaining
   holes, not ranked. Scores of holes they finished are kept.
-- The Leave button frees the seat at once. The host role passes to the next player when the host leaves or drops. The
-  room closes when everyone has left.
+- "Leave game" on the online scorecard (tap the hole card) frees the seat at once; while the game is on it asks once
+  more ("Leave for good?"). Pressed while the connection is lost, it takes the tab back to the start at once, and the
+  seat is given up when its 60 seconds run out.
+- The host role passes to the next connected player when the host leaves or drops; if everyone has dropped, the first
+  one back is host. The room closes when nobody is left and no seat is held.
 
 ### Rooms, codes and the lobby
 
@@ -150,7 +156,7 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
 | Too many new rooms from one IP | 429 | Too many new rooms from your network. Try again in a few minutes. |
 | Room mode other than private | 400 | Only private rooms are available |
 
-- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 4) is raised whenever messages or room state change in a way an
+- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 5) is raised whenever messages or room state change in a way an
   older client cannot handle.
 - Colyseus disconnects a client that sends a message type the room has no handler for, so a client never sends a
   message before the server handles it.
@@ -275,8 +281,8 @@ restores the same view; a new tab with the invite link is still turned away. The
 - A screen still showing the last shot when the server moves on (the 10 seconds ran out) skips to the end of it. A tab
   in the background sends `replayDone` at once, since browsers pause its animation, so it never holds anyone up; when
   it is opened again it already shows the current turn.
-- Until step 11 the online scorecard after a hole has no buttons. Until steps 9 and 10, a shooter who reloads during
-  the rifle choice cannot choose any more and the game waits.
+- Until step 11 the online scorecard after a hole has no buttons. Until steps 9 and 10, a shooter who reloaded during
+  the rifle choice could not choose any more and the game waited; now the drop picks the bullet nearest the cup.
 - `PROTOCOL_VERSION` is now 3.
 
 *Test: integration tests turn down bad shots (wrong turn, not-a-number, power 5 and 0.01, weapon 9, 1.5 and −1, no
@@ -291,7 +297,7 @@ back in both; Ann picks a rifle bullet while Ben sees the numbered bullets witho
 background and its animation paused, the next turn starts 0.1 s after Ben has watched his shot, and Ann's screen has
 already skipped to it. The step 7 browser test and the one-screen playtest still pass.*
 
-**9. Shot clock** · `420b57b`, follow-up (hash added with step 10)
+**9. Shot clock** · `420b57b`, follow-up `7de49b9`
 - The room's `sync()` copies the match into the room state and starts the clock whenever a turn or a rifle choice
   begins: 30 seconds for a turn, flight time plus 15 seconds for a choice (`this.clock.setTimeout`); anything else
   stops it. `match.clock` says what it times (`turn`, `choose` or empty) and `match.timeLeft` the milliseconds left,
@@ -330,21 +336,51 @@ Fire is off while the server still has her turn, Space fires nothing, and TIME�
 Ben, on a phone whose every message reaches the server 0.4 s late, fires with under 0.1 s showing and the shot
 counts. The step 9 browser test still passes.*
 
-**10. Disconnects and reconnecting**
-- `onDrop` already holds the seat for 60 seconds (step 7). Now it also calls `match.setConnected(seat, false)`, and
-  `onReconnect` sets it back. When the 60 seconds run out, `match.leave(seat)` makes the player out. `writeMatch` then
-  copies `connected` from the match, which becomes the only place it is kept.
-- A consented leave (the Leave button) calls `match.leave` at once.
-- The client already rejoins after a reload (step 7), and the SDK reconnects by itself after a network drop. The HUD
-  shows who is reconnecting, with the seconds left.
-- The host role passes on when the host drops; the room closes when nobody is left.
+**10. Disconnects and reconnecting** · done
+- `onDrop` holds the seat for the room's `reconnectSeconds` (60) and calls `match.setConnected(seat, false)`;
+  `onReconnect` sets it back. When the time runs out, Colyseus calls `onLeave`, which calls `match.leave(seat)` and makes
+  the player out. A consented leave goes to `onLeave` at once. `writeMatch` copies `connected` from the match, which is
+  now the only place it is kept. A seat the room cannot hold because it is closing is let go quietly
+  (`allowReconnection(…).catch`), so it never becomes an unhandled rejection.
+- Each seat has `reconnectLeft`: the milliseconds a dropped player has left to come back, written when they drop and
+  every second, 0 otherwise. Screens count down from it as from the shot clock.
+- `match.setConnected` and `match.leave` return the rifle choice they make for the shooter, as `chooseBullet` does. The
+  room then sends `bulletChosen` with `gone: true`, and screens say "Without Ann, the bullet nearest the cup counts."
+  Such a choice can come while the bullets are still flying on screen, so the replay now remembers when the shot lands
+  and `settled()` waits until then plus the margin.
+- The host role passes to the next connected player when the host drops or leaves; if everyone has dropped, the first
+  one back is host. Colyseus closes the room once it has no clients and holds no seat.
+- On screen (`src/game/online.js`): while this player's connection is lost (the SDK's `onDrop` until `onReconnect`),
+  `holdControls()` keeps Fire off as at 0 on the clock, and "You · reconnecting…" shows under the hole card. The SDK
+  retries for about a minute; the lobby turns its retries off until the game starts. For other players the same list
+  shows "Ben · reconnecting 0:42", and toasts say "Ben lost the connection.", "Ben is back." and "Ben left the game."
+  Someone who has left disappears from the course and the minimap at once. In `waiting` the hint says "Waiting for Ben
+  to come back."
+- "Leave game" on the online scorecard (peek, between holes and at the end), with "Leave for good?" while the game is
+  on. Without a connection it stops the retries and goes back to the start; if a retry already under way gets through
+  after all, that room is left at once.
+- Until step 11 the scorecard shows "·" for the holes a player who left will not play, and ranks them like everyone
+  else.
+- `PROTOCOL_VERSION` is now 5.
 
-*Test: integration tests for a drop during your own turn and during someone else's, a return after 30 seconds with
-strokes intact, and no return (seat gone at 60 seconds); by hand, reload a tab mid-game and put a phone in airplane
-mode for 20 seconds.*
+*Test: integration tests check that a drop on your own turn passes it at once without a penalty and others see the
+time left counting down; that a player who drops during someone else's turn is skipped and, back after half their time,
+has their strokes and their place in the rotation; that one who does not come back is out, their token turned down and
+their turns gone; that leaving puts you out at once and passes your turn and the host role; that a drop during the rifle
+choice picks the bullet nearest the cup for everyone; that when everyone still playing is away the match waits and the
+first one back is host and plays on; and that the room closes only once nobody is left and no seat is held. A match
+test checks the choice that `setConnected` and `leave` return. In headless Edge (Ann and Cy on computers, Ben on a
+phone-sized screen over the Wi-Fi address): Ben reloads during Ann's turn and is back on the same turn while Ann saw
+"Ben · reconnecting 1:00 … 0:55", "Ben lost the connection." and "Ben is back."; on Ben's own turn his network goes for
+20 seconds: his screen says "You · reconnecting…" and Fire is off, the turn passes to Cy without a penalty, Ann and Cy
+see his countdown run, and when the network is back he reconnects by himself with his strokes intact and watches Cy's
+turn; Cy leaves from the scorecard (the first press only asks), is back at the start with no error, his turn passes,
+and his character is gone from both courses. The step 7–9 browser tests, the grace test and the one-screen playtest
+still pass. By hand: reload a tab mid-game, and put a phone in airplane mode for 20 seconds.*
 
 **11. Between holes and the end**
-- (Since step 8 the online scorecard after a hole shows no buttons; this step adds the countdown and Play again.)
+- (Since step 8 the online scorecard after a hole shows no buttons, and since step 10 only "Leave game"; this step adds
+  the countdown and Play again.)
 - In `between`, the room waits 10 seconds and then calls `match.nextHole()`. Clients show the scorecard with a
   countdown, "—" for players who are out, and no ranking for them.
 - At `end`, the final scorecard. The host's "Play again" sets the room back to the lobby with the same code (unlocked,
@@ -398,6 +434,10 @@ limit.
 - On plain `http://` (the Wi-Fi address during development) browsers allow neither the clipboard nor the share sheet;
   the lobby then shows the invite link to copy by hand.
 - Phones may pause a page in the background, so there the turn alert may only sound once the page is opened again.
+- A player whose connection drops just as the host starts, before their screen has seen the game begin, has kept no
+  token and cannot come back; their seat runs out after 60 seconds.
+- A server notices a connection that dies without a goodbye (a phone in airplane mode) only by its ping timeout, after
+  a few seconds; until then the turn of that player goes on.
 
 ## Development notes
 
@@ -415,5 +455,12 @@ limit.
 - Tests that import game modules inside the page must import the exact URL the page loaded: after an edit, Vite serves
   the module as `…?t=…`, and a plain import makes a second, unused copy. Once, a test started seconds after an edit
   still got a stale copy; if a hook reads nothing, run the test again.
+- If the game server prints `Restarting 'src/index.js'` with no file edited, something else is touching the files
+  (on the development PC probably the Jottacloud backup of Documents, especially after the PC wakes from standby), and
+  every restart ends the rooms in progress. For browser tests, run the server without watching: `npm start -w server`.
+  A PC going to standby in the middle of a browser test also fails it; rerun it on a fresh headless Edge.
+- Network drops in browser tests: CDP `Network.emulateNetworkConditions` with `offline: true` fires the page's
+  `offline` event, and the SDK closes its socket at once; the server notices at once if the close frame gets out, and
+  otherwise by its ping timeout (about 6 seconds).
 - Since the shot clock, a turn passes after 30 seconds, also in browser tests. Software rendering is slow, so tests must
   not assume the game stays on one turn while they wait (the step 7 and 8 tests check against whatever turn it is).

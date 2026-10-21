@@ -227,11 +227,11 @@ describe('assault rifle', () => {
     expect(st.phase).toBe('settle');
   });
 
-  test('running out of time, or disconnecting, takes the bullet nearest the cup', () => {
-    for (const end of [m => m.timeout(), m => m.setConnected(0, false)]) {
+  test('running out of time, disconnecting or leaving takes the bullet nearest the cup, and says which', () => {
+    for (const end of [m => m.timeout(), m => m.setConnected(0, false), m => m.leave(0)]) {
       const { match, st, M } = rifle(13), c = st.choice.candidates;
       const nearest = c.reduce((best, x) => (flat(x.rest, M.cup) < flat(best.rest, M.cup) ? x : best));
-      end(match);
+      expect(end(match)).toEqual({ proj: nearest.proj, result: { type: 'rest', strokes: 1, done: false, picked: false } });
       expect(st.phase).toBe('settle');
       expect(st.seats[0].ball).toEqual(nearest.rest);
     }

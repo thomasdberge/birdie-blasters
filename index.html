@@ -15,13 +15,16 @@
 
   <div id="hud" class="hud" hidden>
     <div class="hud-top">
-      <button id="holeCard" class="holecard" type="button" aria-label="Show the scorecard">
-        <span class="hc-row"><span>Hole <b id="hcHole">1</b><span class="hc-of">/3</span></span><span>Par <b id="hcPar">3</b></span></span>
-        <span class="hc-name" id="hcName">Warm-Up</span>
-        <span class="hc-player"><i class="chip" id="hcChip"></i><span id="hcPlayer">Player</span><span class="hc-clock" id="hcClock" hidden></span></span>
-        <span class="hc-stats"><span>Stroke <b id="hcStroke">1</b></span><span><b id="hcDist">0</b> m to go</span></span>
-        <span class="hc-wind"><svg id="windArrow" class="wind-arrow" viewBox="-10 -10 20 20" aria-hidden="true"><path d="M0-8 6 1H2V8H-2V1H-6Z"/></svg><span>Wind <b id="hcWind">0.0</b> m/s</span><span class="hc-windrel" id="hcWindRel"></span></span>
-      </button>
+      <div class="hud-left">
+        <button id="holeCard" class="holecard" type="button" aria-label="Show the scorecard">
+          <span class="hc-row"><span>Hole <b id="hcHole">1</b><span class="hc-of">/3</span></span><span>Par <b id="hcPar">3</b></span></span>
+          <span class="hc-name" id="hcName">Warm-Up</span>
+          <span class="hc-player"><i class="chip" id="hcChip"></i><span id="hcPlayer">Player</span><span class="hc-clock" id="hcClock" hidden></span></span>
+          <span class="hc-stats"><span>Stroke <b id="hcStroke">1</b></span><span><b id="hcDist">0</b> m to go</span></span>
+          <span class="hc-wind"><svg id="windArrow" class="wind-arrow" viewBox="-10 -10 20 20" aria-hidden="true"><path d="M0-8 6 1H2V8H-2V1H-6Z"/></svg><span>Wind <b id="hcWind">0.0</b> m/s</span><span class="hc-windrel" id="hcWindRel"></span></span>
+        </button>
+        <ul id="away" class="away" aria-label="Lost connection" hidden></ul>
+      </div>
       <div class="hud-right">
         <canvas id="map" aria-label="Map of the hole"></canvas>
         <div class="mini-row">

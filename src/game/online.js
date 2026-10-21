@@ -11,16 +11,21 @@ import { removeShotVisuals } from '../render/projectiles.js';
 import { ui } from '../ui/elements.js';
 import { setControls, toast } from '../ui/hud.js';
 
-let room = null, ready = false, shown = null, clock = null;
+// seen: per seat, what this screen last knew of it ({ connected, out, left }) · away: per seat, when this screen's
+// countdown for a player who lost the connection ends · offline: this player's own connection is lost
+let room = null, ready = false, shown = null, clock = null, seen = [], away = [], offline = false;
 // room: a joined room whose game has started
 export async function playOnline(joined) {
-  room = joined; ready = false; shown = { hole: -1, turn: -1, over: false }; clock = null;
+  room = joined; ready = false; shown = { hole: -1, turn: -1, over: false }; clock = null; seen = []; away = []; offline = false;
   const live = () => ready && room === joined;
   game.match = remoteMatch(room, {
     shot: m => { if (live()) shotArrived(m); }, chosen: m => { if (live()) choiceArrived(m); },
     timeUp: m => { if (live()) timeUp(m); }, rejected: m => { if (live()) shotRejected(m); }
   });
   game.online = { seat: [...room.state.seats].findIndex(s => s.sessionId === room.sessionId) };
+  // After a network drop the SDK reconnects by itself, and the room state catches the screen up
+  room.onDrop(() => { if (room === joined) offline = true; });
+  room.onReconnect(() => { if (room === joined) offline = false; });
   await labelFont();
   if (room !== joined) return; // the room was left while the font loaded
   setPlayers(game.match.state.seats);
@@ -28,7 +33,7 @@ export async function playOnline(joined) {
   room.onStateChange(() => { if (live()) follow(); });
   follow();
 }
-export function stopOnline() { room = null; ready = false; clock = null; leaveGame(); }
+export function stopOnline() { room = null; ready = false; clock = null; offline = false; leaveGame(); }
 
 // Milliseconds left on the shot clock as this screen counts it down, or null when there is nothing to show: the turn
 // clock while the golf bag is open, aiming or watching, the rifle clock once the bullets have landed here
@@ -37,17 +42,25 @@ export function shotClockLeft() {
   const showing = clock.of === 'turn' ? ['pick', 'aim', 'watch'].includes(state.phase) : state.phase === 'choose';
   return showing ? Math.max(0, clock.ends - performance.now()) : null;
 }
-// Whether this screen's countdown has reached 0
-export function clockRanOut() { return !!clock?.of && performance.now() >= clock.ends; }
+// Whether this player can do nothing now: this screen's countdown has reached 0, or the connection is lost
+export function cannotAct() { return offline || (!!clock?.of && performance.now() >= clock.ends); }
 // Every frame online. This screen's countdown runs behind the server's by a network delay, and a shot takes another to
-// arrive, so the server still takes a shot or a rifle choice half a second after its deadline. At 0 here, Fire goes off,
-// a charge is dropped and the bullet buttons go, so nothing is sent that could come too late; the turn passes when the
-// server says so.
-export function stopAtZero() {
-  if (!clockRanOut()) return;
+// arrive, so the server still takes a shot or a rifle choice half a second after its deadline. At 0 here, or while the
+// connection is lost, Fire goes off, a charge is dropped and the bullet buttons go, so nothing is sent that could come
+// too late; the turn passes when the server says so.
+export function holdControls() {
+  if (!cannotAct()) return;
   cancelCharge();
   if (!ui.fire.disabled) setControls(false);
   if (!ui.choose.hidden) ui.choose.hidden = true;
+}
+// Who has lost the connection, for the HUD: { name, color, ms } with the milliseconds they have left to come back, and
+// ms null for this player while their own connection is lost
+export function awayList() {
+  const now = performance.now(), mine = game.online.seat, me = state.players[mine], rows = [];
+  if (offline && me) rows.push({ name: me.name, color: me.color, ms: null });
+  seen.forEach((s, i) => { if (i !== mine && !s.connected && !s.out) rows.push({ name: state.players[i].name, color: state.players[i].color, ms: Math.max(0, away[i] - now) }); });
+  return rows;
 }
 
 // Browsers pause animation in a tab in the background, so such a tab cannot play a shot to the end. It says it has
@@ -62,13 +75,37 @@ function follow() {
   const ms = game.match.state, c = game.match.clock;
   // The server writes the time left about once a second; every new value sets when this screen's countdown ends
   if (!clock || c.of !== clock.of || c.left !== clock.left) clock = { ...c, ends: performance.now() + c.left };
+  followSeats(ms);
   if (ms.hole !== shown.hole) { shown = { hole: ms.hole, turn: ms.turn, over: false }; showHole(); }
   else if (ms.turn !== shown.turn) { shown.turn = ms.turn; skipShot(); beginTurn(); }
   else if (!shown.over && (ms.phase === 'between' || ms.phase === 'end')) { shown.over = true; skipShot(); endHole(); }
+  if (ms.phase === 'waiting') showWaiting(ms);
 }
 function skipShot() {
   timers.length = 0; state.waitFn = null; state.timeScale = 1; state.slowT = 0;
   removeShotVisuals(); state.shot = null; state.choice = null; ui.choose.hidden = true;
+}
+// Players who lose the connection, come back or leave. The others are told; someone who has left disappears from the
+// course at once. Each countdown to come back starts again from every new value the server writes.
+function followSeats(ms) {
+  const left = game.match.reconnectLeft;
+  ms.seats.forEach((s, i) => {
+    const was = seen[i];
+    if (was && i !== game.online.seat) {
+      if (s.out && !was.out) { toast(`${s.name} left the game.`); state.players[i].out = true; }
+      else if (!s.out && was.connected !== s.connected) toast(s.connected ? `${s.name} is back.` : `${s.name} lost the connection.`);
+    }
+    if (left[i] !== was?.left) away[i] = performance.now() + left[i];
+    seen[i] = { connected: s.connected, out: s.out, left: left[i] };
+  });
+}
+// Everyone who still has to finish the hole has lost the connection: the match waits until one of them is back
+function showWaiting(ms) {
+  if (state.phase !== 'watch' && state.phase !== 'settle') return;
+  const text = `Waiting for ${ms.seats.filter(s => !s.out && !s.done && !s.connected).map(s => s.name).join(' or ')} to come back.`;
+  if (ui.hint.textContent === text) return;
+  ui.hint.textContent = text;
+  for (const p of state.players) p.char.ring.visible = false;
 }
 
 // The room state already has the shot (it is sent after the state patch), so the match on screen is ahead of the display
@@ -80,6 +117,7 @@ function shotArrived(m) {
 function choiceArrived(m) {
   if (!state.shot || m.turn !== shown.turn) return;
   if (m.timeUp) toast('Time’s up: the bullet nearest the cup counts.');
+  else if (m.gone) toast(`Without ${state.players[state.shot.shooter].name}, the bullet nearest the cup counts.`);
   showChoice(m.k, m.result);
 }
 function timeUp(m) {

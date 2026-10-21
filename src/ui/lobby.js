@@ -74,30 +74,40 @@ function attach(joined) {
   room = joined; leaving = false; playing = false;
   history.replaceState(null, '', inviteLink(room.roomId)); // the address bar doubles as the invite link
   el.setup.hidden = true; el.lobby.hidden = false; el.link.hidden = true; el.inviteBtn.textContent = inviteLabel();
-  room.onStateChange(render);
-  room.onReconnect(remember); // every reconnection brings a new token
-  room.onLeave(() => {
-    const lost = !leaving; room = null; session.remove(REJOIN_KEY);
-    if (playing) { playing = false; stopOnline(); }
-    backToSetup(lost ? 'You lost the connection to the room.' : '');
-  });
+  // In the lobby a lost connection frees the seat at once, so there is nothing to reconnect to until the game starts
+  joined.reconnection.enabled = false;
+  joined.onStateChange(s => { if (room === joined) render(s); });
+  // Every reconnection brings a new token. A room this tab gave up while reconnecting is left as soon as it is back.
+  joined.onReconnect(() => { if (room === joined) remember(); else joined.leave(); });
+  joined.onLeave(() => { if (room === joined) gone(leaving ? '' : 'You lost the connection to the room.'); });
   render(room.state);
 }
 function remember() { if (room && playing) session.set(REJOIN_KEY, { code: room.roomId, token: room.reconnectionToken }); }
+// This tab is out of the room: back to the start screen
+function gone(message) {
+  room = null; session.remove(REJOIN_KEY);
+  if (playing) { playing = false; stopOnline(); }
+  backToSetup(message);
+}
 function backToSetup(message) {
   history.replaceState(null, '', location.pathname);
   el.lobby.hidden = true; el.setup.hidden = false;
   showError(message);
 }
-async function leaveRoom() {
+// Leaves on purpose, from the lobby or during a game: the seat is given up at once, for good. Without a connection
+// there is nobody to tell, so the tab stops reconnecting and goes back to the start; the server gives the seat up when
+// its time to come back runs out.
+export async function leaveRoom() {
+  if (!room) return;
   leaving = true;
-  try { if (room) await room.leave(); } catch (e) { backToSetup(''); }
+  if (!room.connection.isOpen) { room.reconnection.enabled = false; gone(''); return; }
+  try { await room.leave(); } catch (e) { gone(''); }
 }
 
 function render(s) {
   if (!room || !s || !s.seats) return;
   if (s.phase === 'playing') {
-    if (!playing) { playing = true; el.lobby.hidden = true; remember(); playOnline(room); }
+    if (!playing) { playing = true; el.lobby.hidden = true; room.reconnection.enabled = true; remember(); playOnline(room); }
     return;
   }
   const me = room.sessionId, seats = [...s.seats], isHost = s.host === me;

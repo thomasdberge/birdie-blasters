@@ -50,10 +50,10 @@ async function startGame(...names) {
 // The match the server runs for a room
 const serverRoom = room => colyseus.getRoomById(room.roomId);
 // What the room state mirrors of a match. Not the match's own bookkeeping (turn order, the hole's base wind, a pending
-// rifle choice), not style (the room picks the looks) and not connected (the room tracks that itself for now).
+// rifle choice) and not style (the room picks the looks).
 const mirrored = ms => ({
   phase: ms.phase, hole: ms.hole, turn: ms.turn, cur: ms.cur, wind: ms.wind,
-  seats: ms.seats.map(s => ({ name: s.name, ball: s.ball, stand: s.stand, strokes: s.strokes, done: s.done, picked: s.picked, out: s.out, scores: s.scores }))
+  seats: ms.seats.map(s => ({ name: s.name, ball: s.ball, stand: s.stand, strokes: s.strokes, done: s.done, picked: s.picked, out: s.out, connected: s.connected, scores: s.scores }))
 });
 const shown = room => mirrored(readMatch(room.state));
 // Waits until a client's copy of the match is the server's
@@ -79,6 +79,13 @@ async function untilTrue(check, what, ms = 4000) {
 async function dropConnection(room) {
   room.reconnection.enabled = false;
   await room.leave(false);
+}
+// Ends the current turn as if its clock had run out, and has these screens watch it; resolves once the next turn is on
+async function passTurn(room, screens) {
+  const turn = room.match.state.turn;
+  room.timeUp();
+  for (const s of screens) s.send('replayDone', { turn });
+  await untilTrue(() => room.match.state.turn > turn, `turn ${turn} passes`);
 }
 
 describe('private rooms', () => {
@@ -296,6 +303,109 @@ describe('dropping out', () => {
     await until(ann, s => s.seats.length === 1);
     expect(await turnedDown(colyseus.sdk.reconnect(token))).toBeInstanceOf(Error);
   });
+
+  test('dropping out on your own turn passes it at once, without a penalty; the others see how long you have to come back', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben');
+    await dropConnection(ann);
+    const s = await until(ben, st => st.match.turn === 2);
+    expect(readMatch(ben.state)).toMatchObject({ phase: 'turn', cur: 1 });
+    expect([s.match.clock, s.seats[0].connected, s.seats[0].strokes, s.host]).toEqual(['turn', false, 0, ben.sessionId]);
+    const first = s.seats[0].reconnectLeft;
+    expect(first).toBeGreaterThan(58000);
+    expect(first).toBeLessThanOrEqual(60000);
+    await untilTrue(() => ben.state.seats[0].reconnectLeft < first, 'the time left is written again', 1500);
+    expect(first - ben.state.seats[0].reconnectLeft).toBeGreaterThan(500);
+    expect(first - ben.state.seats[0].reconnectLeft).toBeLessThan(1500);
+    await inStep(ben, serverRoom(ben).match.state);
+  });
+
+  test('a player who drops out during someone else\'s turn is skipped until they come back, with their strokes intact', async () => {
+    const [ann, ben, cy] = await startGame('Ann', 'Ben', 'Cy'), room = serverRoom(ann);
+    room.reconnectSeconds = 2;
+    await passTurn(room, [ann, ben, cy]); // Ann's
+    await passTurn(room, [ann, ben, cy]); // Ben's: he has a penalty stroke now
+    const token = ben.reconnectionToken;
+    await dropConnection(ben); // during Cy's turn, which goes on
+    await until(ann, s => !s.seats[1].connected && s.seats[1].reconnectLeft > 0);
+    expect(room.match.state).toMatchObject({ turn: 3, cur: 2 });
+    await passTurn(room, [ann, cy]); // Cy's
+    await passTurn(room, [ann, cy]); // Ann's, and Ben is skipped
+    expect(room.match.state).toMatchObject({ turn: 5, cur: 2 });
+    await wait(1000); // half his time to come back
+    const back = await colyseus.sdk.reconnect(token);
+    const s = await until(ann, st => st.seats[1].connected);
+    expect([s.seats[1].reconnectLeft, s.seats[1].strokes]).toEqual([0, 1]);
+    await passTurn(room, [ann, back, cy]); // Cy's
+    await passTurn(room, [ann, back, cy]); // Ann's, and Ben is next again
+    expect(room.match.state).toMatchObject({ turn: 7, cur: 1 });
+    await inStep(back, room.match.state);
+  });
+
+  test('a player who does not come back in time is out of the match: no seat, no more turns', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben'), room = serverRoom(ann);
+    room.reconnectSeconds = 1;
+    const token = ben.reconnectionToken, t0 = Date.now();
+    await dropConnection(ben);
+    await until(ann, s => s.seats[1].out);
+    expect((Date.now() - t0) / 1000).toBeGreaterThan(0.9);
+    expect(readMatch(ann.state).seats[1]).toMatchObject({ out: true, connected: false, stand: null });
+    expect(ann.state.seats[1].reconnectLeft).toBe(0);
+    expect(await turnedDown(colyseus.sdk.reconnect(token))).toBeInstanceOf(Error);
+    await passTurn(room, [ann]);
+    expect(room.match.state.cur).toBe(0); // Ann's turns follow each other
+    await inStep(ann, room.match.state);
+  });
+
+  test('leaving on purpose puts you out at once; your turn passes and the next player is host', async () => {
+    const [ann, ben, cy] = await startGame('Ann', 'Ben', 'Cy');
+    await ann.leave();
+    const s = await until(ben, st => st.seats[0].out);
+    expect(readMatch(ben.state)).toMatchObject({ phase: 'turn', cur: 1, turn: 2 });
+    expect([s.host, s.seats[0].connected, s.seats[0].strokes, s.seats[0].reconnectLeft]).toEqual([ben.sessionId, false, 0, 0]);
+    await inStep(cy, serverRoom(ben).match.state);
+  });
+
+  test('dropping out while picking the rifle bullet takes the one nearest the cup, and everyone learns which', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben');
+    const shots = received(ben, 'shotResult'), chosen = received(ben, 'bulletChosen'), M = courseModel(0);
+    ann.send('shoot', { weapon: widx('auto'), yaw: Math.atan2(M.cup.x - M.tee.x, M.cup.z - M.tee.z), pitch: 10, power: 0.4, turn: 1 });
+    await untilTrue(() => shots.length === 1, 'the shot arrives');
+    const shot = unpackShot(shots[0].shot), candidates = shot.outcome.candidates;
+    const toCup = k => { const r = shot.projs[candidates[k]].rest; return Math.hypot(r.x - M.cup.x, r.z - M.cup.z); };
+    const nearest = candidates.map((_, k) => k).reduce((a, b) => (toCup(b) < toCup(a) ? b : a));
+    await dropConnection(ann);
+    await untilTrue(() => chosen.length === 1, 'the choice is made for Ann');
+    expect(chosen[0]).toEqual({ turn: 1, k: nearest, result: { type: 'rest', strokes: 1, done: false, picked: false }, gone: true });
+    expect(readMatch(ben.state).seats[0].ball).toEqual(shot.projs[candidates[nearest]].rest);
+    ben.send('replayDone', { turn: 1 });
+    await until(ben, s => s.match.turn === 2 && s.match.cur === 1 && s.match.clock === 'turn');
+  });
+
+  test('when everyone still playing the hole is away, the match waits; the first one back is host and plays on', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben'), room = serverRoom(ann);
+    room.reconnectSeconds = 30;
+    const token = ann.reconnectionToken;
+    await dropConnection(ann);
+    await until(ben, s => s.match.cur === 1);
+    await dropConnection(ben);
+    await untilTrue(() => room.match.state.phase === 'waiting', 'the match waits');
+    expect([room.state.match.clock, room.state.host]).toEqual(['', '']);
+    const back = await colyseus.sdk.reconnect(token);
+    const s = await until(back, st => st.match.phase === 'turn' && st.match.cur === 0);
+    expect([s.match.clock, s.host]).toEqual(['turn', back.sessionId]);
+    await inStep(back, room.match.state);
+  });
+
+  test('the room closes once nobody is left, not while a seat is still held for someone', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben'), code = ann.roomId;
+    serverRoom(ann).reconnectSeconds = 1;
+    await dropConnection(ann);
+    await until(ben, s => !s.seats[0].connected);
+    await ben.leave();
+    await wait(300);
+    expect(colyseus.getRoomById(code)).toBeDefined(); // Ann may still come back
+    await untilTrue(() => !colyseus.getRoomById(code), 'the room closes', 3000);
+  });
 });
 
 describe('shots', () => {
@@ -509,5 +619,5 @@ describe('shot clock', () => {
     await wait(150);
     expect(readMatch(ben.state).seats[0].ball).toEqual(shot.projs[candidates[nearest]].rest);
     expect(room.match.state.seats[0].ball).toEqual(shot.projs[candidates[nearest]].rest);
-  });
+  }, 10000); // the bullets fly for a few seconds first
 });

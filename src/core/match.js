@@ -161,21 +161,23 @@ export function makeMatch(names, rand) {
     startHole(state.hole + 1); return {};
   }
   // A disconnected seat keeps its place but is skipped. If it was their turn, it passes without a penalty.
+  // A rifle choice of theirs takes the bullet nearest the cup and returns it as chooseBullet does.
   function setConnected(seat, connected) {
     const s = state.seats[seat];
     if (!s || s.out) return { error: 'no such seat' };
     s.connected = connected;
     if (!connected && state.phase === 'turn' && state.cur === seat) advance();
-    else if (!connected && state.phase === 'choose' && state.choice.seat === seat) autoChoice();
+    else if (!connected && state.phase === 'choose' && state.choice.seat === seat) return autoChoice();
     else if (connected && state.phase === 'waiting') advance();
     return {};
   }
-  // A seat that leaves is out for the rest of the match: no more turns, no scores, not ranked
+  // A seat that leaves is out for the rest of the match: no more turns, no scores, not ranked. A rifle choice of theirs
+  // is made as when they disconnect.
   function leave(seat) {
     const s = state.seats[seat];
     if (!s || s.out) return { error: 'no such seat' };
     Object.assign(s, { out: true, connected: false, stand: null });
-    if (state.phase === 'choose' && state.choice.seat === seat) autoChoice();
+    if (state.phase === 'choose' && state.choice.seat === seat) return autoChoice();
     else if ((state.phase === 'turn' && state.cur === seat) || state.phase === 'waiting') advance();
     else if (state.phase === 'turn' || state.phase === 'settle') layout();
     return {};

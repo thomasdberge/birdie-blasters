@@ -6,7 +6,7 @@ import { $, COARSE } from '../platform.js';
 import { sfx } from '../audio/sfx.js';
 import { currentLie, distToCup, state, world } from '../game/state.js';
 import { ui } from './elements.js';
-import { fmt1 } from './format.js';
+import { fmt1, minSec } from './format.js';
 import { mouseMode } from './pointerLock.js';
 
 let windCache = '';
@@ -71,6 +71,22 @@ export function setClock(ms) {
   ui.clock.hidden = !s; ui.clock.textContent = s;
   ui.clock.classList.toggle('urgent', !!s && +s <= 5);
   ui.clock.setAttribute('aria-label', s ? `${s} seconds left` : '');
+}
+// Online: players who lost the connection, under the hole card. rows: { name, color, ms } with the milliseconds they have
+// left to come back, or ms null for this player while their own connection is lost.
+let awayShown = '';
+export function setAway(rows) {
+  const items = rows.map(r => ({ color: r.color, text: r.ms == null ? 'You · reconnecting…' : `${r.name} · reconnecting ${minSec(r.ms)}` }));
+  const key = items.map(r => r.color + r.text).join('|');
+  if (key === awayShown) return;
+  awayShown = key;
+  ui.away.replaceChildren(...items.map(r => {
+    const li = document.createElement('li'), chip = document.createElement('i'), text = document.createElement('span');
+    chip.className = 'chip'; chip.style.background = r.color; text.textContent = r.text;
+    li.append(chip, text);
+    return li;
+  }));
+  ui.away.hidden = !items.length;
 }
 // Online, when it becomes your turn: a short sound, and "Your turn!" in the tab title until you act or the turn passes
 let pageTitle = null;

@@ -8,7 +8,7 @@ import { STEP } from '../../src/core/physics.js';
 import { cleanName, makeRoomCode, NAME_MAX, packShot, PROTOCOL_VERSION, REJECT } from '../../src/core/protocol.js';
 import { GolfState, Seat, writeMatch } from './state.js';
 
-// How long a player who dropped out of a game in progress keeps their seat
+// How long a player who dropped out of a game in progress keeps their seat; after that they are out of the match
 export const RECONNECT_SECONDS = 60;
 // After a shot has landed, how long the next turn waits at most for a screen that is still showing it
 export const REPLAY_MARGIN = 10;
@@ -63,6 +63,9 @@ export class GolfRoom extends Room {
   turnSeconds = TURN_SECONDS;
   chooseSeconds = CHOOSE_SECONDS;
   graceSeconds = GRACE_SECONDS;
+  reconnectSeconds = RECONNECT_SECONDS;
+  // sessionId -> when the seat of a player who dropped out is given up
+  away = new Map();
 
   // Runs for every matchmaking request (create, join by code), before a room is made or a seat reserved
   static async onAuth(token, options, context) {
@@ -95,36 +98,67 @@ export class GolfRoom extends Room {
     if (!this.state.host) this.state.host = client.sessionId;
   }
 
-  // A connection lost during a game (a reload, a network drop) keeps the seat for a while; the same browser tab can come
-  // back with its reconnection token. In the lobby the seat is freed at once (onLeave).
+  // A connection lost during a game (a reload, a network drop) keeps the seat for reconnectSeconds; the same browser tab
+  // can come back with its reconnection token. Meanwhile the match skips the player's turns, and one that was on passes
+  // at once. When the time is up, onLeave makes them leave the match. In the lobby the seat is freed at once (onLeave).
   onDrop(client) {
-    const seat = this.seatOf(client);
-    if (this.state.phase !== 'playing' || !seat) return;
-    seat.connected = false;
-    this.allowReconnection(client, RECONNECT_SECONDS);
+    const i = this.seatIndex(client);
+    if (this.state.phase !== 'playing' || i < 0) return;
+    // Turned down only when the room is closing; Colyseus then calls onLeave at once
+    this.allowReconnection(client, this.reconnectSeconds).catch(() => {});
+    this.away.set(client.sessionId, Date.now() + this.reconnectSeconds * 1000);
+    this.writeAway();
+    this.seatChange(() => this.match.setConnected(i, false));
+    this.passHost(client.sessionId);
     this.watched(client.sessionId); // a shot is not waited for on a screen that is gone
   }
 
   onReconnect(client) {
-    const seat = this.seatOf(client);
-    if (seat) seat.connected = true;
+    const i = this.seatIndex(client);
+    if (i < 0) return;
+    this.back(client.sessionId);
+    this.seatChange(() => this.match.setConnected(i, true));
+    if (!this.state.host) this.state.host = client.sessionId; // everyone else had dropped out too
   }
 
+  // A player left on purpose (the Leave button), or did not come back in time after dropping out
   onLeave(client) {
-    const seats = this.state.seats, i = seats.findIndex(s => s.sessionId === client.sessionId);
+    const seats = this.state.seats, i = this.seatIndex(client);
     if (i < 0) return;
     if (this.state.phase === 'lobby') seats.splice(i, 1);
-    else seats[i].connected = false;
-    if (this.state.host === client.sessionId) {
-      const next = seats.find(s => s.connected);
-      this.state.host = next ? next.sessionId : '';
-    }
+    else { this.back(client.sessionId); this.seatChange(() => this.match.leave(i)); }
+    this.passHost(client.sessionId);
     this.watched(client.sessionId);
   }
 
   // The client's seat; its index in the room is its seat in the match
   seatIndex(client) { return this.state.seats.findIndex(s => s.sessionId === client.sessionId); }
-  seatOf(client) { return this.state.seats[this.seatIndex(client)]; }
+  // When the host drops out or leaves, the next player who is still connected becomes host
+  passHost(sessionId) {
+    if (this.state.host !== sessionId) return;
+    const next = this.state.seats.find(s => s.connected && s.sessionId !== sessionId);
+    this.state.host = next ? next.sessionId : '';
+  }
+  // Clients count down from reconnectLeft, as from the shot clock
+  writeAway() {
+    for (const s of this.state.seats) if (this.away.has(s.sessionId)) s.reconnectLeft = Math.max(0, Math.round(this.away.get(s.sessionId) - Date.now()));
+  }
+  // A player who dropped out is back, or gone for good
+  back(sessionId) {
+    this.away.delete(sessionId);
+    const seat = this.state.seats.find(s => s.sessionId === sessionId);
+    if (seat) seat.reconnectLeft = 0;
+  }
+  // Tells the match that a seat dropped out, came back or left (act does). If that makes their rifle choice, everyone
+  // learns which bullet counts, as when the time runs out.
+  seatChange(act) {
+    const ms = this.match.state, turn = ms.turn, candidates = ms.phase === 'choose' ? ms.choice.candidates.map(c => c.proj) : null;
+    const r = act();
+    this.sync();
+    if (!candidates || !r.result) return;
+    this.broadcast('bulletChosen', { turn, k: candidates.indexOf(r.proj), result: r.result, gone: true }, { afterNextPatch: true });
+    this.settled();
+  }
 
   // The current player fires; aim.turn is the turn they fired in. The match checks the aim and changes nothing when the
   // shot is not allowed (bad numbers, not your turn, a second shot); the room only says which seat sent it, and turns
@@ -137,11 +171,12 @@ export class GolfRoom extends Room {
     const r = turn === ms.turn ? this.match.shoot(seat, { weapon, yaw, pitch, power }) : { error: 'not your turn' };
     const late = Number.isInteger(turn) && turn === this.timedOut;
     if (r.error) { client.send('shotRejected', { reason: late ? 'time' : r.error }, { afterNextPatch: true }); return; }
-    this.sync(r.shot.steps * STEP); // a rifle choice is timed from when the bullets have landed
+    const flight = r.shot.steps * STEP;
+    this.sync(flight); // a rifle choice is timed from when the bullets have landed
     // Sent after the state patch, so a client's room state already has the shot when the result arrives
     this.broadcast('shotResult', { turn: ms.turn, shooter: seat, aim: { weapon, yaw, pitch, power }, shot: packShot(r.shot), result: r.result }, { afterNextPatch: true });
-    this.watchFrom(ms.turn);
-    if (ms.phase === 'settle') this.settled(r.shot.steps * STEP);
+    this.watchFrom(ms.turn, flight);
+    if (ms.phase === 'settle') this.settled();
   }
 
   // The assault rifle's shooter picks the bullet that counts
@@ -152,7 +187,7 @@ export class GolfRoom extends Room {
     if (r.error) return;
     this.sync();
     this.broadcast('bulletChosen', { turn: ms.turn, k, result: r.result }, { afterNextPatch: true });
-    this.settled(0);
+    this.settled();
   }
 
   // Copies the match into the room state, and starts the shot clock when a turn or a rifle choice begins (wait seconds
@@ -187,22 +222,23 @@ export class GolfRoom extends Room {
       this.sync();
       this.broadcast('timeUp', { turn, seat, result: r.result }, { afterNextPatch: true });
       this.watchFrom(turn);
-      this.settled(0);
+      this.settled();
     } else if (ms.phase === 'choose') {
       const candidates = ms.choice.candidates.map(c => c.proj), r = this.match.timeout();
       this.sync();
       this.broadcast('bulletChosen', { turn, k: candidates.indexOf(r.proj), result: r.result, timeUp: true }, { afterNextPatch: true });
-      this.settled(0);
+      this.settled();
     }
   }
 
-  // Everyone in the room now is to watch what happened in this turn before the next one starts
-  watchFrom(turn) { this.replay = { turn, waiting: new Set(this.clients.map(c => c.sessionId)), timer: null }; }
-  // The turn has ended on screen (after seconds of flight still to watch). The next turn waits for everyone who saw it
-  // happen to say they have watched it (replayDone), but no more than replayMargin seconds after that.
-  settled(seconds) {
+  // Everyone in the room now is to watch what happened in this turn (a shot with seconds of flight) before the next
+  // one starts
+  watchFrom(turn, flight = 0) { this.replay = { turn, lands: Date.now() + flight * 1000, waiting: new Set(this.clients.map(c => c.sessionId)), timer: null }; }
+  // The turn has ended, though its shot may still be flying on screen. The next turn waits for everyone who saw it happen
+  // to say they have watched it (replayDone), but no more than replayMargin seconds after it has landed.
+  settled() {
     if (!this.replay.waiting.size) { this.nextTurn(); return; }
-    this.replay.timer = this.clock.setTimeout(() => this.nextTurn(), (seconds + this.replayMargin) * 1000);
+    this.replay.timer = this.clock.setTimeout(() => this.nextTurn(), Math.max(0, this.replay.lands - Date.now()) + this.replayMargin * 1000);
   }
   // sessionId has watched the end of the turn, or is gone
   watched(sessionId) {
@@ -223,6 +259,7 @@ export class GolfRoom extends Room {
     // Seats keep their lobby order, so seat i in the room is seat i in the match
     this.match = makeMatch(this.state.seats.map(s => s.name), Math.random);
     this.sync();
+    this.clock.setInterval(() => this.writeAway(), 1000);
     this.state.phase = 'playing';
     await this.lock(); // nobody joins a game in progress
   }

@@ -21,10 +21,10 @@ import { buildMapStatic, sizeMap } from '../ui/minimap.js';
 import { exitLock } from '../ui/pointerLock.js';
 import { showBoard } from '../ui/scorecard.js';
 
-// The screen catches up with what the match says about a player
+// The screen catches up with what the match says about a player. out: they have left an online game.
 export function showSeat(i) {
   const s = game.match.state.seats[i];
-  Object.assign(state.players[i], { ball: { ...s.ball }, strokes: s.strokes, done: s.done, picked: s.picked, scores: s.scores.slice() });
+  Object.assign(state.players[i], { ball: { ...s.ball }, strokes: s.strokes, done: s.done, picked: s.picked, out: s.out, scores: s.scores.slice() });
 }
 // Characters go to where the match says each player stands
 export function layoutChars(instant) {

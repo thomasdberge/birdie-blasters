@@ -6,6 +6,7 @@ import { cancelCharge } from '../game/shot.js';
 import { game, state } from '../game/state.js';
 import { leaveGame, nextHole, playAgain } from '../game/turns.js';
 import { ui } from './elements.js';
+import { leaveRoom } from './lobby.js';
 import { exitLock } from './pointerLock.js';
 
 function markCell(score, par) {
@@ -47,6 +48,13 @@ export function showBoard(kind) {
     $('#scTitle').textContent = 'Scorecard';
     $('#scSub').textContent = `Hole ${state.holeIdx + 1} in progress. Only finished holes are counted.`;
     focusBtn = btn('Back to the course', 'btn-primary', () => { ui.board.hidden = true; });
+  }
+  // Online, leaving gives the seat up for good, so while the game is on the button asks once more
+  if (game.online) {
+    const leave = btn('Leave game', 'btn-ghost', () => {
+      if (kind === 'final' || leave.dataset.sure) { leaveRoom(); return; }
+      leave.dataset.sure = '1'; leave.textContent = 'Leave for good?';
+    });
   }
   ui.board.hidden = false;
   if (focusBtn) focusBtn.focus({ preventScroll: true });

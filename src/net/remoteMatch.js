@@ -21,7 +21,7 @@ export function readMatch(rs) {
 }
 
 // room: a joined room from the browser SDK. The server answers actions with messages (see src/core/protocol.js):
-// on.shot({ turn, shooter, aim, shot, result }) for every shot, on.chosen({ turn, k, result, timeUp }) for a rifle
+// on.shot({ turn, shooter, aim, shot, result }) for every shot, on.chosen({ turn, k, result, timeUp, gone }) for a rifle
 // choice, on.timeUp({ turn, seat, result }) when the shot clock runs out, on.rejected({ reason }) when it turns this
 // player's shot down.
 export function remoteMatch(room, on) {
@@ -35,6 +35,9 @@ export function remoteMatch(room, on) {
     // The shot clock: what it times ('turn', 'choose' or '' when stopped) and the milliseconds it had left when the
     // server last wrote it (about once a second)
     get clock() { return { of: room.state.match.clock, left: room.state.match.timeLeft }; },
+    // Per seat, the milliseconds a player who lost the connection has left to come back (0 for everyone else), as the
+    // server last wrote them (about once a second)
+    get reconnectLeft() { return [...room.state.seats].map(s => s.reconnectLeft); },
     // The server decides; the shot comes back through on.shot
     shoot(seat, aim) { room.send('shoot', { ...aim, turn: room.state.match.turn }); return {}; },
     chooseBullet(seat, k) { room.send('chooseBullet', { k }); return {}; },

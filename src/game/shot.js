@@ -9,7 +9,7 @@ import { SAMPLE_HZ } from '../core/shot.js';
 import { WEAPONS } from '../core/weapons.js';
 import { sfx } from '../audio/sfx.js';
 import { setZoom } from './aim.js';
-import { clockRanOut } from './online.js';
+import { cannotAct } from './online.js';
 import { clock, game, later, playsSeat, state, world } from './state.js';
 import { layoutChars, nextTurn, showSeat } from './turns.js';
 import { cam, shake } from '../render/camera.js';
@@ -28,7 +28,7 @@ const SAMPLE_EVERY = Math.round(1 / (STEP * SAMPLE_HZ)); // simulation steps bet
 
 export function cancelCharge() { if (!state.charging) return; state.charging = false; ui.fire.classList.remove('charging'); setFill(0); }
 export function startCharge() {
-  if (state.phase !== 'aim' || state.charging || clockRanOut()) return;
+  if (state.phase !== 'aim' || state.charging || cannotAct()) return;
   sfx.unlock(); state.charging = true; state.chargeT = 0; state.power = 0; ui.fire.classList.add('charging');
 }
 export function releaseCharge() {

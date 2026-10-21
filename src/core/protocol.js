@@ -2,14 +2,15 @@
 // Plain JavaScript, no Three.js or DOM.
 
 // Raise this whenever messages or room state change in a way an older client cannot handle
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 export const ROOM_NAME = 'golf';
 
 // Messages. Client → server: start · shoot { turn, weapon, yaw, pitch, power } (turn: the turn it was fired in) ·
 // chooseBullet { k } · replayDone { turn }.
-// Server → clients: shotResult { turn, shooter, aim, shot (packShot), result } · bulletChosen { turn, k, result, timeUp }
-// (timeUp: the shot clock picked the bullet nearest the cup) · timeUp { turn, seat, result } (the shot clock ran out) ·
-// shotRejected { reason } to the shooter alone. The room state (server/src/state.js) has everything else.
+// Server → clients: shotResult { turn, shooter, aim, shot (packShot), result } · bulletChosen { turn, k, result, timeUp,
+// gone } (the bullet nearest the cup was picked because the shot clock ran out, or because the shooter dropped out or
+// left) · timeUp { turn, seat, result } (the shot clock ran out) · shotRejected { reason } to the shooter alone. The room
+// state (server/src/state.js) has everything else.
 
 // What the shooter is told when the server turns a shot down. reason is match.shoot's error, or 'time' when the shot
 // came after the shot clock ran out.
