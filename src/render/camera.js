@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { clamp, lerp } from '../core/math.js';
 import { WEAPONS } from '../core/weapons.js';
 import { REDUCED } from '../platform.js';
-import { clock, state, world } from '../game/state.js';
+import { clock, playsSeat, state, world } from '../game/state.js';
 import { baseFov, camera } from './scene.js';
 
 export const cam = { pos: new THREE.Vector3(60, 60, 60), look: new THREE.Vector3(), dPos: new THREE.Vector3(), dLook: new THREE.Vector3(), k: 3, shake: 0, hdir: new THREE.Vector3(0, 0, -1), arrived: false };
@@ -18,9 +18,9 @@ export function updateCamera(dt) {
   if (state.phase === 'setup' || state.phase === 'between' || state.phase === 'end' || (state.phase === 'watch' && !shooter)) {
     const mid = { x: (M.tee.x + M.cup.x) / 2, z: (M.tee.z + M.cup.z) / 2 }, a = clock.t * 0.06;
     cam.dPos.set(mid.x + Math.cos(a) * 150, 85, mid.z + Math.sin(a) * 150); cam.dLook.set(mid.x, 0, mid.z); k = 1.5;
-  } else if (state.phase === 'aim' || state.phase === 'pick' || (state.phase === 'flight' && state.shot && state.shot.age < 0.35)) {
+  } else if (state.phase === 'aim' || state.phase === 'pick' || ownLaunch()) {
     // First person: the eye of the current player, looking along the crosshair
-    const p = state.players[state.cur], W = state.phase === 'flight' ? state.shot.W : WEAPONS[state.weapon];
+    const p = state.players[state.cur], W = state.phase === 'flight' && state.shot ? state.shot.W : WEAPONS[state.weapon];
     // The view rises only about half as much as the barrel, so the course stays in sight on high lobs
     const pr = (state.pitch - aimOffset()) * Math.PI / 180, dx = Math.sin(state.yaw) * Math.cos(pr), dy = Math.sin(pr), dz = Math.cos(state.yaw) * Math.cos(pr);
     cam.dPos.set(p.ball.x, p.ball.y + W.eye, p.ball.z);
@@ -62,6 +62,8 @@ function applyCamera(dt) {
   const zf = lerp(state.zoomF, state.zoom && state.phase === 'aim' ? (WEAPONS[state.weapon].zoom || 3) : 1, 1 - Math.exp(-dt * 10));
   if (Math.abs(zf - state.zoomF) > 0.001) { state.zoomF = zf; camera.fov = baseFov / zf; camera.updateProjectionMatrix(); }
 }
-export function fpView() { return ((state.phase === 'aim' || state.phase === 'pick') && cam.arrived) || (state.phase === 'flight' && state.shot && state.shot.age < 0.35); }
+export function fpView() { return ((state.phase === 'aim' || state.phase === 'pick') && cam.arrived) || ownLaunch(); }
+// The shooter's own screen stays first person while the shot leaves the barrel, and online until the server has sent it
+function ownLaunch() { return state.phase === 'flight' && playsSeat(state.cur) && (!state.shot || state.shot.age < 0.35); }
 // Degrees the crosshair sits above the centre of the view. Zero when zoomed, for precise shots.
 export function aimOffset() { return clamp(state.pitch * 0.45, 0, 22) * clamp((3 - state.zoomF) / 2, 0, 1); }

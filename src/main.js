@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { STEP } from './core/physics.js';
 import { $ } from './platform.js';
 import { applyHolds, holds } from './game/aim.js';
+import { initOnline } from './game/online.js';
 import { playShotStep } from './game/shot.js';
 import { clock, distToCup, state, timers, world } from './game/state.js';
 import { cam, fpView, updateCamera } from './render/camera.js';
@@ -82,6 +83,7 @@ if (!renderer) {
   initPointerLock();
   initInput();
   initLobby();
+  initOnline();
   initSetup();
   boot();
 }

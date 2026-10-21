@@ -9,7 +9,7 @@ import { SAMPLE_HZ } from '../core/shot.js';
 import { WEAPONS } from '../core/weapons.js';
 import { sfx } from '../audio/sfx.js';
 import { setZoom } from './aim.js';
-import { clock, game, later, state, world } from './state.js';
+import { clock, game, later, playsSeat, state, world } from './state.js';
 import { layoutChars, nextTurn, showSeat } from './turns.js';
 import { cam, shake } from '../render/camera.js';
 import { launchFly } from '../render/characters.js';
@@ -37,16 +37,19 @@ export function releaseCharge() {
 }
 function fire(power) {
   const pi = state.cur, aim = { weapon: state.weapon, yaw: state.yaw, pitch: state.pitch, power };
-  const { shot, result, error } = game.match.shoot(pi, aim);
-  if (error) { setFill(0); toast(error); return; }
-  playShot(pi, aim, shot, result);
+  const { shot, result } = game.match.shoot(pi, aim);
+  if (shot) { playShot(pi, aim, shot, result); return; }
+  // Online the server decides the shot, and playback starts when it arrives. Until then the view stays first person.
+  state.phase = 'flight'; state.shot = null; setControls(false); setFill(power);
+  ui.fireSub.textContent = Math.round(power * 100) + '%';
 }
 // Plays a shot the match has decided. pi: the shooter's seat · aim: what they fired · shot, result: from match.shoot
 export function playShot(pi, aim, shot, result) {
   const p = state.players[pi], W = WEAPONS[aim.weapon], power = aim.power;
   p.strokes++; state.shotsFired++;
-  state.phase = 'flight'; setControls(false); setFill(power); updateHUD();
-  ui.fireSub.textContent = Math.round(power * 100) + '%';
+  state.phase = 'flight'; setControls(false); updateHUD();
+  // The Fire button shows the power on the shooter's screen; someone watching online did not fire
+  if (playsSeat(pi)) { setFill(power); ui.fireSub.textContent = Math.round(power * 100) + '%'; } else setFill(0);
   const projs = shot.projs.map(data => ({ data, b: { ...data.launch }, vis: makeProjectile(W), delay: 0, active: true, result: null, trailT: 0, lastBounce: 0, sinking: null, gone: false }));
   // step: simulation steps played so far · next: the next event to show · hit: someone was hit
   state.shot = { W, shooter: pi, age: 0, acc: 0, step: 0, next: 0, events: shot.events, outcome: shot.outcome, result, hit: false, active: true, color: p.color, projs, primary: 0 };
@@ -138,11 +141,13 @@ function endProj(q, type, at) {
 function resolveShot() {
   const s = state.shot; state.phase = 'settle';
   if (s.outcome.type !== 'choose') { finishShot(s.result, s.projs[s.outcome.proj]); return; }
-  // Assault rifle: the player picks which bullet counts
+  // Assault rifle: the shooter picks which bullet counts; online, everyone else watches them pick
   const rest = s.outcome.candidates.map(k => s.projs[k]);
   state.phase = 'choose'; state.choice = rest; exitLock();
   const M = world.M;
   rest.forEach((q, k) => { q.marker = numberSprite(k + 1, s.color); q.marker.position.set(q.b.x, q.b.y + 1.4, q.b.z); scene.add(q.marker); });
+  if (s.chosen) { showChoice(s.chosen.k, s.chosen.result); return; } // the choice arrived while the bullets were still flying here
+  if (!playsSeat(s.shooter)) { ui.hint.textContent = `${state.players[s.shooter].name} is picking the bullet that counts.`; return; }
   ui.chooseRow.innerHTML = rest.map((q, k) => {
     const d = Math.round(Math.hypot(q.b.x - M.cup.x, q.b.z - M.cup.z)), surf = SURF_NAME[M.surface(q.b.x, q.b.z)] || '';
     return `<button type="button" class="cbtn" data-k="${k}"><b>${k + 1}</b><span>${d} m to go</span><small>${surf}</small></button>`;
@@ -151,11 +156,20 @@ function resolveShot() {
   ui.choose.hidden = false;
   const best = ui.chooseRow.querySelector('.cbtn'); if (best) best.focus({ preventScroll: true });
 }
+// The shooter picks bullet k (the buttons only show on the shooter's screen)
 export function chooseBullet(k) {
-  if (state.phase !== 'choose' || !state.choice || !state.choice[k]) return;
-  const q = state.choice[k], { result } = game.match.chooseBullet(state.shot.shooter, k);
+  if (state.phase !== 'choose' || ui.choose.hidden || !state.choice || !state.choice[k]) return;
+  const { result } = game.match.chooseBullet(state.shot.shooter, k);
   ui.choose.hidden = true;
-  state.shot.projs.forEach(o => { if (o.marker) { scene.remove(o.marker); disposeTree(o.marker); o.marker = null; } if (o !== q) o.gone = true; });
+  if (result) showChoice(k, result); // online the server's answer arrives as a message
+}
+// Bullet k counts: the others go, and the shot ends with the match's result
+export function showChoice(k, result) {
+  const s = state.shot;
+  if (state.phase !== 'choose') { s.chosen = { k, result }; return; } // still flying on this screen
+  const q = state.choice[k];
+  ui.choose.hidden = true;
+  s.projs.forEach(o => { if (o.marker) { scene.remove(o.marker); disposeTree(o.marker); o.marker = null; } if (o !== q) o.gone = true; });
   state.choice = null; state.phase = 'settle';
   finishShot(result, q);
 }

@@ -3,7 +3,7 @@
 import { HOLES } from '../core/courses.js';
 import { $ } from '../platform.js';
 import { cancelCharge } from '../game/shot.js';
-import { state } from '../game/state.js';
+import { game, state } from '../game/state.js';
 import { leaveGame, nextHole, playAgain } from '../game/turns.js';
 import { ui } from './elements.js';
 import { exitLock } from './pointerLock.js';
@@ -36,13 +36,13 @@ export function showBoard(kind) {
     const winners = state.players.filter((p, i) => totals[i] === best);
     $('#scTitle').textContent = state.players.length === 1 ? `${totals[0]} strokes in total` : winners.length > 1 ? 'It’s a tie!' : `${winners[0].name} wins!`;
     $('#scSub').textContent = state.players.length === 1 ? `The course is par ${parTot}. ${totals[0] - parTot <= 0 ? 'Nicely shot.' : 'Try to beat yourself next round.'}` : winners.length > 1 ? `${winners.map(w => w.name).join(' and ')} shared the win on ${best} strokes.` : `${best} strokes over three holes. The course is par ${parTot}.`;
-    focusBtn = btn('Play again', 'btn-primary', playAgain);
-    btn('New players', 'btn-ghost', leaveGame);
+    // Online the server starts the next hole, and a new game
+    if (!game.online) { focusBtn = btn('Play again', 'btn-primary', playAgain); btn('New players', 'btn-ghost', leaveGame); }
   } else if (kind === 'hole') {
     const def = HOLES[state.holeIdx];
     $('#scTitle').textContent = `Hole ${state.holeIdx + 1} done`;
     $('#scSub').textContent = `${def.name}, par ${def.par}. The lowest score on this hole tees off first on the next.`;
-    focusBtn = btn(`To hole ${state.holeIdx + 2}`, 'btn-primary', nextHole);
+    if (!game.online) focusBtn = btn(`To hole ${state.holeIdx + 2}`, 'btn-primary', nextHole);
   } else {
     $('#scTitle').textContent = 'Scorecard';
     $('#scSub').textContent = `Hole ${state.holeIdx + 1} in progress. Only finished holes are counted.`;

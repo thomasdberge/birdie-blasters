@@ -78,8 +78,8 @@ export function showHole() {
   ui.setup.hidden = true; ui.board.hidden = true; ui.hud.hidden = false;
   sizeMap(); buildMapStatic();
   cam.arrived = false;
-  if (ms.phase === 'turn') beginTurn();
-  else { state.phase = 'watch'; setControls(false); world.M.wind = { ...ms.wind }; } // online, between turns: watch until the next one
+  if (ms.cur >= 0) beginTurn();
+  else { state.phase = 'watch'; setControls(false); world.M.wind = { ...ms.wind }; } // online, nobody's turn: watch until there is one
   const def = HOLES[idx];
   later(0.1, () => showBanner(`Hole ${idx + 1}: ${def.name}`, `Par ${def.par} · ${Math.round(Math.hypot(world.M.cup.x - world.M.tee.x, world.M.cup.z - world.M.tee.z))} m · wind ${fmt1(world.M.wind.speed)} m/s`, '#f2eed6'));
 }
@@ -92,7 +92,7 @@ export function autoWeapon(p) {
   return widx('bazooka');
 }
 // Shows the turn the match has started, with this turn's wind
-function beginTurn() {
+export function beginTurn() {
   const ms = game.match.state, i = ms.cur;
   state.cur = i; state.phase = 'pick'; cam.arrived = false;
   state.players.forEach((_, k) => showSeat(k));
@@ -105,7 +105,7 @@ function beginTurn() {
   vm.handMat.color.set(p.color);
   setZoom(false); state.zoomF = 1.001;
   updateHUD();
-  if (playsSeat(i)) openPick(true); else watchTurn();
+  if (playsSeat(i) && ms.phase === 'turn') openPick(true); else watchTurn();
 }
 // Someone else's turn, online: no golf bag for you. The camera watches over the shooter's shoulder, and they hold the
 // weapon the bag recommends.
@@ -119,10 +119,11 @@ function watchTurn() {
 // Everyone has watched the shot land: the match starts the next turn or ends the hole
 export function nextTurn() {
   game.match.next();
+  if (game.online) return; // the server starts the next turn once every screen has watched the shot (src/game/online.js)
   if (game.match.state.phase === 'turn') beginTurn();
   else endHole();
 }
-function endHole() {
+export function endHole() {
   state.players.forEach((_, i) => showSeat(i));
   state.phase = game.match.state.phase; // 'between' or 'end'
   setControls(false);

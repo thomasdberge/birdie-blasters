@@ -1,11 +1,12 @@
 // The golf room through the real browser SDK: private rooms by code, the lobby, starting, turning requests down, the
-// match in the room state, and taking a seat back after a reload.
+// match in the room state, taking a seat back after a reload, and shots.
 import { isDeepStrictEqual } from 'node:util';
 import { Client } from '@colyseus/sdk';
 import { boot } from '@colyseus/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
 import { courseModel } from '../../src/core/match.js';
-import { CODE_ALPHABET, PROTOCOL_VERSION, REJECT, ROOM_NAME } from '../../src/core/protocol.js';
+import { STEP } from '../../src/core/physics.js';
+import { CODE_ALPHABET, PROTOCOL_VERSION, REJECT, ROOM_NAME, unpackShot } from '../../src/core/protocol.js';
 import { WEAPONS, widx } from '../../src/core/weapons.js';
 import { readMatch } from '../../src/net/remoteMatch.js';
 import { server } from '../src/app.js';
@@ -66,6 +67,13 @@ function botAim(ms) {
   const weapon = ['dart', 'pistol', 'shotgun', 'auto', 'sniper', 'grenade', 'bazooka'].map(widx).find(i => WEAPONS[i].range >= d) ?? widx('bazooka');
   const W = WEAPONS[weapon];
   return { weapon, yaw: Math.atan2(M.cup.x - s.ball.x, M.cup.z - s.ball.z), pitch: W.pitchDef, power: Math.min(1, Math.max(0.05, d / W.range)) };
+}
+const wait = ms => new Promise(r => setTimeout(r, ms));
+// Every message of this type a client gets from now on
+function received(room, type) { const got = []; room.onMessage(type, m => got.push(m)); return got; }
+async function untilTrue(check, what, ms = 4000) {
+  for (const end = Date.now() + ms; Date.now() < end; await wait(10)) if (check()) return;
+  throw new Error('timed out waiting until ' + what);
 }
 // A page that is closed or reloaded: the connection drops without a goodbye, and nothing reconnects by itself
 async function dropConnection(room) {
@@ -287,5 +295,129 @@ describe('dropping out', () => {
     await dropConnection(ben);
     await until(ann, s => s.seats.length === 1);
     expect(await turnedDown(colyseus.sdk.reconnect(token))).toBeInstanceOf(Error);
+  });
+});
+
+describe('shots', () => {
+  // A dart pointed steeply down lands at once, and darts have no random spread
+  const dartDown = { weapon: widx('dart'), yaw: 0, pitch: -60, power: 0.1 };
+  const towardCup = M => Math.atan2(M.cup.x - M.tee.x, M.cup.z - M.tee.z);
+
+  test('bad shots are turned down and change nothing; so is a second shot in the same turn', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben');
+    const room = serverRoom(ann), before = JSON.stringify(room.match.state), got = [received(ann, 'shotResult'), received(ben, 'shotResult')];
+    const good = botAim(room.match.state);
+    ben.send('shoot', good); // not his turn
+    for (const bad of [{ ...good, yaw: NaN }, { ...good, pitch: 'up' }, { ...good, power: 5 }, { ...good, power: 0.01 }, { ...good, weapon: 9 },
+      { ...good, weapon: 1.5 }, { ...good, weapon: -1 }, { yaw: 0 }, null, 'fire', [1, 2, 3]]) ann.send('shoot', bad);
+    await wait(200);
+    expect(JSON.stringify(room.match.state)).toBe(before);
+    expect(got.flat()).toEqual([]);
+    expect(ann.connection.isOpen && ben.connection.isOpen).toBe(true); // turned down, not thrown out
+    ann.send('shoot', good); ann.send('shoot', good);
+    await untilTrue(() => got.every(g => g.length === 1), 'the shot reaches both');
+    await wait(200);
+    expect(got.map(g => g.length)).toEqual([1, 1]);
+    expect(room.match.state.seats[0].strokes).toBe(1);
+  });
+
+  test('a shot reaches every client as the server decided it, and the next turn waits until both have watched it', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben');
+    const room = serverRoom(ann), got = [received(ann, 'shotResult'), received(ben, 'shotResult')], strokesThen = [];
+    ben.onMessage('shotResult', () => strokesThen.push(readMatch(ben.state).seats[0].strokes));
+    const aim = botAim(room.match.state);
+    ann.send('shoot', aim);
+    await untilTrue(() => got.every(g => g.length === 1), 'the shot reaches both');
+    const [a, b] = got.map(g => g[0]), ms = room.match.state, shot = unpackShot(a.shot);
+    expect(b).toEqual(a);
+    expect([a.turn, a.shooter, a.aim]).toEqual([1, 0, aim]);
+    expect(a.result).toEqual({ type: 'rest', strokes: 1, done: false, picked: false });
+    expect(shot.projs[shot.outcome.proj].rest).toEqual(ms.seats[0].ball);
+    expect(strokesThen).toEqual([1]); // the room state had the shot before its result arrived
+    const p = shot.projs[0];
+    expect(p.path.length % 3).toBe(0);
+    expect(Array.from(p.path.subarray(0, 3))).toEqual([p.launch.x, p.launch.y, p.launch.z].map(Math.fround));
+    expect(shot.events.at(-1).type).toBe('end');
+    // The next turn waits for both screens
+    ann.send('replayDone', { turn: 1 });
+    ben.send('replayDone', { turn: 7 }); // some other turn
+    await wait(200);
+    expect(ms.phase).toBe('settle');
+    ben.send('replayDone', { turn: 1 });
+    for (const r of [ann, ben]) await until(r, s => s.match.turn === 2);
+    expect([readMatch(ben.state).phase, readMatch(ben.state).cur]).toEqual(['turn', 1]);
+  });
+
+  test('a screen that never finishes watching holds the next turn up only until the shot has landed plus the margin', async () => {
+    const [ann] = await startGame('Ann', 'Ben');
+    const room = serverRoom(ann), got = received(ann, 'shotResult');
+    room.replayMargin = 0.5;
+    ann.send('shoot', dartDown);
+    await untilTrue(() => got.length === 1, 'the shot arrives');
+    const t0 = Date.now(), flight = unpackShot(got[0].shot).steps * STEP;
+    ann.send('replayDone', { turn: 1 }); // Ben never does
+    await untilTrue(() => ann.state.match.turn === 2, 'the next turn starts');
+    const waited = (Date.now() - t0) / 1000;
+    expect(waited).toBeGreaterThan(flight + 0.5 - 0.15);
+    expect(waited).toBeLessThan(flight + 0.5 + 1);
+  });
+
+  test('a player who drops out is not waited for', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben');
+    const room = serverRoom(ann), got = received(ann, 'shotResult');
+    ann.send('shoot', dartDown);
+    await untilTrue(() => got.length === 1, 'the shot arrives');
+    ann.send('replayDone', { turn: 1 });
+    await wait(150);
+    expect(room.match.state.phase).toBe('settle');
+    await dropConnection(ben);
+    await untilTrue(() => ann.state.match.turn === 2, 'the next turn starts', 1500); // long before the 10-second margin
+  });
+
+  test('assault rifle: only the shooter picks the bullet that counts, and every client learns which', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben');
+    const room = serverRoom(ann), ms = room.match.state, shots = received(ben, 'shotResult');
+    const chosen = [received(ann, 'bulletChosen'), received(ben, 'bulletChosen')];
+    ann.send('shoot', { weapon: widx('auto'), yaw: towardCup(courseModel(0)), pitch: 10, power: 0.4 });
+    await untilTrue(() => shots.length === 1, 'the shot arrives');
+    const shot = unpackShot(shots[0].shot);
+    expect([shot.outcome.type, shot.outcome.candidates.length, shots[0].result]).toEqual(['choose', 3, null]);
+    // Screens that have watched the bullets land say so before the choice; that counts
+    ann.send('replayDone', { turn: 1 }); ben.send('replayDone', { turn: 1 });
+    const before = JSON.stringify(ms);
+    ben.send('chooseBullet', { k: 1 }); // not his shot
+    for (const k of [3, -1, 1.5, 'one', undefined]) ann.send('chooseBullet', { k });
+    ann.send('chooseBullet', null);
+    await wait(200);
+    expect(JSON.stringify(ms)).toBe(before);
+    expect(chosen.flat()).toEqual([]);
+    ann.send('chooseBullet', { k: 2 });
+    await untilTrue(() => chosen.every(c => c.length === 1), 'the choice reaches both');
+    expect(chosen[1][0]).toEqual({ turn: 1, k: 2, result: { type: 'rest', strokes: 1, done: false, picked: false } });
+    expect(readMatch(ben.state).seats[0].ball).toEqual(shot.projs[shot.outcome.candidates[2]].rest);
+    for (const r of [ann, ben]) await until(r, s => s.match.turn === 2);
+  });
+
+  test('a hit moves the other player for every client', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben');
+    const room = serverRoom(ann), ms = room.match.state, M = courseModel(0), got = [received(ann, 'shotResult'), received(ben, 'shotResult')];
+    // Ben stands 15 m ahead of Ann, who aims a flat sniper shot at his head
+    const yaw = towardCup(M), x = M.tee.x + Math.sin(yaw) * 15, z = M.tee.z + Math.cos(yaw) * 15;
+    ms.seats[1].ball = { x, y: M.height(x, z), z }; ms.seats[1].stand = { ...ms.seats[1].ball };
+    writeMatch(room.state, ms);
+    await until(ben, s => s.seats[1].ball.x === x);
+    ann.send('shoot', { weapon: widx('sniper'), yaw, pitch: 0, power: 0.5 });
+    await untilTrue(() => got.every(g => g.length === 1), 'the shot reaches both');
+    const hit = unpackShot(got[1][0].shot).events.find(e => e.type === 'hit');
+    expect([hit.player, hit.kind, hit.to]).toEqual([1, 'head', { x: M.tee.x, y: M.tee.y, z: M.tee.z }]);
+    for (const r of [ann, ben]) expect(readMatch(r.state).seats[1].ball).toEqual(hit.to);
+  });
+
+  test('before the game starts, shot messages are ignored', async () => {
+    const ann = await create('Ann');
+    await until(ann, s => s.seats.length === 1);
+    ann.send('shoot', { weapon: 0, yaw: 0, pitch: 10, power: 0.5 }); ann.send('chooseBullet', { k: 0 }); ann.send('replayDone', { turn: 1 });
+    await wait(150);
+    expect([ann.connection.isOpen, ann.state.phase]).toEqual([true, 'lobby']);
   });
 });

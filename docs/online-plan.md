@@ -16,8 +16,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 4 | One-screen game runs on the match | `34747ee` |
 | 5 | Game server with private rooms | `3feb680` |
 | 6 | Online menu, lobby and invite links | `f3e2ae2` |
-| 7 | The server runs the match | done (hash added with step 8) |
-| 8 | Shots decided by the server | to do |
+| 7 | The server runs the match | `51c8609` |
+| 8 | Shots decided by the server | done (hash added with step 9) |
 | 9 | Shot clock | to do |
 | 10 | Disconnects and reconnecting | to do |
 | 11 | Between holes and the end | to do |
@@ -69,6 +69,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 - Hits are checked where players stand (the layout from the match), and knock-backs start from their ball. The one
   difference from the old game: a character still walking into place is hit where they are heading, not mid-walk.
 - Turn order is round-robin, as before; the lowest score on the previous hole tees off first, seat order breaks ties.
+- After a shot, the next turn starts once every screen that got it has watched it land, but at most 10 seconds after
+  it lands. A screen that is still showing it then skips ahead; a tab in the background never holds anyone up.
 
 ### Shot clock and timeouts
 
@@ -133,7 +135,7 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
 | Too many new rooms from one IP | 429 | Too many new rooms from your network. Try again in a few minutes. |
 | Room mode other than private | 400 | Only private rooms are available |
 
-- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 2) is raised whenever messages or room state change in a way an
+- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 3) is raised whenever messages or room state change in a way an
   older client cannot handle.
 - Colyseus disconnects a client that sends a message type the room has no handler for, so a client never sends a
   message before the server handles it.
@@ -202,7 +204,7 @@ address, then two PC tabs and a phone by hand.*
 
 ### Phase C: the server decides every shot (in progress)
 
-**7. The server runs the match** · done
+**7. The server runs the match** · `51c8609`
 - On start, the room creates `makeMatch(seat names, Math.random)` with seats in lobby order, so seat i in the room is
   seat i in the match. Characters keep the look they had in the lobby.
 - The room state mirrors the match: `match` (`phase`, `hole`, `turn`, `cur`, `wind` with `x`, `z`, `dir`, `speed`), and
@@ -230,19 +232,44 @@ phone-sized screen over the Wi-Fi address) see the same match, wind, hole card a
 shooter has the golf bag; both spectators' cameras sit at the same spot; reloading a spectator and then the shooter
 restores the same view; a new tab with the invite link is still turned away. The one-screen playtest still passes.*
 
-**8. Shots decided by the server**
-- Messages:
+**8. Shots decided by the server** · done
+- Messages (listed in `src/core/protocol.js`):
   - client → server: `shoot {weapon, yaw, pitch, power}`, `chooseBullet {k}`, `replayDone {turn}`
-  - server → clients: `shotResult` with the shooter, the `simulateShot` result (per projectile: launch, start and
-    end step, result, path, final, rest), the events, the outcome, and the match's result
-- Validation is already in `match.shoot`; the room only checks that the sender sits in the current seat. Paths can be
-  sent as `Float32Array` to keep messages small.
-- The next turn starts when every connected client has sent `replayDone`, or after the flight time plus 10 seconds,
-  whichever comes first.
+  - server → clients: `shotResult {turn, shooter, aim, shot, result}`, with the whole `simulateShot` result (per
+    projectile: launch, start and end step, result, path, final, rest; the events; the outcome) and the match's result.
+    New: `bulletChosen {turn, k, result}` tells everyone which rifle bullet the shooter picked.
+- Both results are sent just after the state patch with the change (`afterNextPatch`), so a client's room state already
+  has the shot when its result arrives: the match on screen is ahead of the display copies, as on one screen.
+- The room only finds the sender's seat; `match.shoot` and `match.chooseBullet` turn anything else down without a
+  change and nothing is sent back. A client that plays fair never sends a shot the match refuses, and if the server
+  has moved on meanwhile, the room state shows it.
+- Paths go as the bytes of a `Float32Array` in a `Uint8Array` (`packShot`, `unpackShot`): msgpack garbles a
+  `Float32Array` itself, but carries a `Uint8Array` intact.
+- The next turn waits for every client that got the shot to send `replayDone`, at most until 10 seconds after the shot
+  lands (after its flight, or after the rifle choice). A client that drops out is not waited for, and one that comes
+  back does not count. `replayDone` sent while the shooter is still choosing counts. The room's `replayMargin` (10 s)
+  can be shortened in tests.
+- On screen: `fire()` sends the shot and keeps the first-person view until the result arrives (one round trip), then
+  `playShot()` plays it in every window. Spectators get the chase camera from the start and an empty Fire button. In a
+  rifle choice they see the numbered bullets and "Ann is picking the bullet that counts."; a choice that arrives
+  before the bullets have landed on that screen is applied when they land.
+- A screen still showing the last shot when the server moves on (the 10 seconds ran out) skips to the end of it. A tab
+  in the background sends `replayDone` at once, since browsers pause its animation, so it never holds anyone up; when
+  it is opened again it already shows the current turn.
+- Until step 11 the online scorecard after a hole has no buttons. Until steps 9 and 10, a shooter who reloads during
+  the rifle choice cannot choose any more and the game waits.
+- `PROTOCOL_VERSION` is now 3.
 
-*Test: integration tests show bad input (wrong turn, not-a-number, power 5, weapon 9, a second shot) is rejected and
-changes nothing; in two windows a shot plays in both and ends where the server says; a hit moves the other player in
-both.*
+*Test: integration tests turn down bad shots (wrong turn, not-a-number, power 5 and 0.01, weapon 9, 1.5 and −1, no
+aim at all, a second shot) without a change or a reply; check that every client gets the same shot as the server
+decided, after the state patch, with float32 paths; that the next turn waits for both screens, ignores a `replayDone`
+for another turn, gives up after the flight plus the margin, and does not wait for a player who drops out; that only
+the shooter picks the rifle bullet and every client learns which; that a hit moves the other player for every client;
+and that shot messages before the start are ignored. In headless Edge (Ann on a computer, Ben on a phone-sized screen
+over the Wi-Fi address): Ann's dart plays in both windows and ends where the server says; Ben's sniper hit knocks Ann
+back in both; Ann picks a rifle bullet while Ben sees the numbered bullets without buttons; with Ann's tab in the
+background and its animation paused, the next turn starts 0.1 s after Ben has watched his shot, and Ann's screen has
+already skipped to it. The step 7 browser test and the one-screen playtest still pass.*
 
 **9. Shot clock**
 - 30 seconds per turn on the room clock (`this.clock.setTimeout`), starting when the turn begins. The rifle choice gets
@@ -271,6 +298,7 @@ strokes intact, and no return (seat gone at 60 seconds); by hand, reload a tab m
 mode for 20 seconds.*
 
 **11. Between holes and the end**
+- (Since step 8 the online scorecard after a hole shows no buttons; this step adds the countdown and Play again.)
 - In `between`, the room waits 10 seconds and then calls `match.nextHole()`. Clients show the scorecard with a
   countdown, "—" for players who are out, and no ranking for them.
 - At `end`, the final scorecard. The host's "Play again" sets the room back to the lobby with the same code (unlocked,

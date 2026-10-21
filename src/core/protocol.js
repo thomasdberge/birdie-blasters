@@ -2,8 +2,22 @@
 // Plain JavaScript, no Three.js or DOM.
 
 // Raise this whenever messages or room state change in a way an older client cannot handle
-export const PROTOCOL_VERSION = 2;
+export const PROTOCOL_VERSION = 3;
 export const ROOM_NAME = 'golf';
+
+// Messages. Client → server: start · shoot { weapon, yaw, pitch, power } · chooseBullet { k } · replayDone { turn }.
+// Server → clients: shotResult { turn, shooter, aim, shot (packShot), result } · bulletChosen { turn, k, result }.
+// The room state (server/src/state.js) has everything else.
+
+// A shot from simulateShot (src/core/shot.js) as shotResult carries it. Flight paths only animate the shot, so float32
+// is plenty and halves their size. msgpack garbles a Float32Array but carries its bytes intact as a Uint8Array.
+export function packShot(shot) {
+  return { ...shot, projs: shot.projs.map(p => ({ ...p, path: new Uint8Array(new Float32Array(p.path).buffer) })) };
+}
+// Copying the bytes first gives the floats an aligned buffer of their own
+export function unpackShot(shot) {
+  return { ...shot, projs: shot.projs.map(p => ({ ...p, path: new Float32Array(new Uint8Array(p.path).buffer) })) };
+}
 
 // Room codes use consonants and digits only. No vowels, and no digits that read as vowels (0, 1, 3, 4), so a code
 // never spells a word; no look-alikes either (O/0, I/1/L).

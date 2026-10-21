@@ -36,7 +36,8 @@ Built with Three.js and Vite.
   in `src/ui/lobby.js`; the browser SDK only loads when someone goes online.
   `remoteMatch.js` is the match an online client plays: the same shape as
   `makeMatch`, with its state read from the room state (`server/src/state.js`
-  writes it).
+  writes it) and its actions sent to the server, which answers with messages
+  (listed in `src/core/protocol.js`).
 - `src/game/`: plays the match on screen. The match decides each shot when it
   is fired; `shot.js` plays it back, and the players' ball, strokes, done and
   scores in `state.js` are display copies that catch up as it plays out.
