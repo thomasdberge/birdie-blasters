@@ -1,8 +1,8 @@
-// Room codes, nicknames and shot messages (src/core/protocol.js), shared by the browser and the game server.
+// Room codes, nicknames, shot messages and live aims (src/core/protocol.js), shared by the browser and the game server.
 import { expect, test } from 'vitest';
 import { rng } from '../src/core/math.js';
 import { courseModel } from '../src/core/match.js';
-import { CODE_ALPHABET, CODE_LENGTH, cleanName, makeRoomCode, NAME_MAX, packShot, readRoomCode, unpackShot } from '../src/core/protocol.js';
+import { cleanAim, CODE_ALPHABET, CODE_LENGTH, cleanName, makeRoomCode, NAME_MAX, packShot, readRoomCode, unpackShot } from '../src/core/protocol.js';
 import { launchShot, simulateShot } from '../src/core/shot.js';
 import { WEAPONS } from '../src/core/weapons.js';
 
@@ -47,4 +47,12 @@ test('a packed shot unpacks with float32 flight paths and everything else unchan
     expect({ ...p, path: null }).toEqual({ ...shot.projs[k], path: null });
   });
   expect({ ...back, projs: null }).toEqual({ ...shot, projs: null });
+});
+
+test('a live aim passes on only a weapon index and finite yaw and pitch', () => {
+  expect(cleanAim({ weapon: 0, yaw: -12.5, pitch: 80, turn: 3 })).toEqual({ weapon: 0, yaw: -12.5, pitch: 80 });
+  expect(cleanAim({ weapon: WEAPONS.length - 1, yaw: 0, pitch: 0, evil: '<b>' })).toEqual({ weapon: WEAPONS.length - 1, yaw: 0, pitch: 0 });
+  const ok = { weapon: 2, yaw: 1, pitch: 10 };
+  for (const bad of [{ ...ok, weapon: WEAPONS.length }, { ...ok, weapon: -1 }, { ...ok, weapon: 1.5 }, { ...ok, weapon: '2' }, { ...ok, yaw: NaN },
+    { ...ok, yaw: Infinity }, { ...ok, pitch: 'up' }, { ...ok, pitch: undefined }, null, undefined, 'aim', [2, 1, 10]]) expect(cleanAim(bad)).toBe(null);
 });

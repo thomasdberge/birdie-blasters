@@ -122,7 +122,7 @@ export function turnTimedOut(seat, result) {
   later(delay, nextTurn);
 }
 // Someone else's turn, online: no golf bag for you. The camera watches over the shooter's shoulder, and they hold the
-// weapon the bag recommends.
+// weapon the bag recommends, facing the cup, until their own aim arrives (src/game/online.js).
 function watchTurn() {
   const p = state.players[state.cur], w = autoWeapon(p);
   cancelCharge(); setZoom(false); exitLock(); holds.clear();

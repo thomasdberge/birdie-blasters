@@ -5,7 +5,7 @@ import { randomInt } from 'node:crypto';
 import { matchMaker, Room, ServerError } from '@colyseus/core';
 import { makeMatch, MAX_SEATS } from '../../src/core/match.js';
 import { STEP } from '../../src/core/physics.js';
-import { cleanName, makeRoomCode, NAME_MAX, packShot, PROTOCOL_VERSION, REJECT } from '../../src/core/protocol.js';
+import { cleanAim, cleanName, makeRoomCode, NAME_MAX, packShot, PROTOCOL_VERSION, REJECT } from '../../src/core/protocol.js';
 import { clearMatch, GolfState, Seat, writeMatch } from './state.js';
 
 // How long a player who dropped out of a game in progress keeps their seat; after that they are out of the match
@@ -20,6 +20,9 @@ export const BETWEEN_SECONDS = 10;
 // A screen's countdown runs behind the server's by a network delay and a shot needs another to arrive, so one sent while
 // the screen still showed time left is not lost to latency. Screens let nothing be sent once they reach 0.
 export const GRACE_SECONDS = 0.5;
+// A client that sends more messages than this in a second is disconnected. A fair one sends at most 10 aims a second,
+// a few other messages, and the up to 10 it kept while its connection was lost.
+export const MAX_MESSAGES_PER_SECOND = 30;
 // The clock for each match phase that has one: the room's setting with its length in seconds
 const SECONDS = { turn: 'turnSeconds', choose: 'chooseSeconds', between: 'betweenSeconds' };
 
@@ -61,6 +64,7 @@ const reject = r => new ServerError(r.code, r.message);
 
 export class GolfRoom extends Room {
   maxClients = MAX_SEATS;
+  maxMessagesPerSecond = MAX_MESSAGES_PER_SECOND;
   state = new GolfState();
   // Seconds; tests make them shorter
   replayMargin = REPLAY_MARGIN;
@@ -94,6 +98,7 @@ export class GolfRoom extends Room {
     this.onMessage('chooseBullet', (client, msg) => this.chooseBullet(client, msg));
     this.onMessage('replayDone', (client, msg) => { if (msg?.turn === this.replay?.turn) this.watched(client.sessionId); });
     this.onMessage('playAgain', client => this.playAgain(client));
+    this.onMessage('aim', (client, msg) => this.relayAim(client, msg));
     this.clock.setInterval(() => this.writeAway(), 1000);
   }
 
@@ -185,6 +190,14 @@ export class GolfRoom extends Room {
     this.broadcast('shotResult', { turn: ms.turn, shooter: seat, aim: { weapon, yaw, pitch, power }, shot: packShot(r.shot), result: r.result }, { afterNextPatch: true });
     this.watchFrom(ms.turn, flight);
     if (ms.phase === 'settle') this.settled();
+  }
+
+  // The shooter's live aim goes to everyone else, so they can watch the shooter turn. It only shows where they are aiming:
+  // the match never sees it. Only from the player whose turn it is, during that turn, and only the clean numbers.
+  relayAim(client, msg) {
+    const ms = this.match?.state, aim = cleanAim(msg), seat = this.seatIndex(client);
+    if (!ms || !aim || ms.phase !== 'turn' || seat !== ms.cur || msg.turn !== ms.turn) return;
+    this.broadcast('aim', { turn: ms.turn, seat, ...aim }, { except: client });
   }
 
   // The assault rifle's shooter picks the bullet that counts

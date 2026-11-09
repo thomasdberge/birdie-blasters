@@ -1,16 +1,30 @@
 // What the browser and the game server agree on: protocol version, room codes, nicknames and why a request is turned down.
 // Plain JavaScript, no Three.js or DOM.
 
+import { WEAPONS } from './weapons.js';
+
 // Raise this whenever messages or room state change in a way an older client cannot handle
-export const PROTOCOL_VERSION = 6;
+export const PROTOCOL_VERSION = 7;
 export const ROOM_NAME = 'golf';
 
 // Messages. Client → server: start · shoot { turn, weapon, yaw, pitch, power } (turn: the turn it was fired in) ·
-// chooseBullet { k } · replayDone { turn } · playAgain (the host, after the last hole: back to the lobby).
+// chooseBullet { k } · replayDone { turn } · playAgain (the host, after the last hole: back to the lobby) ·
+// aim { turn, weapon, yaw, pitch } (the shooter's live aim, for the others to watch).
 // Server → clients: shotResult { turn, shooter, aim, shot (packShot), result } · bulletChosen { turn, k, result, timeUp,
 // gone } (the bullet nearest the cup was picked because the shot clock ran out, or because the shooter dropped out or
-// left) · timeUp { turn, seat, result } (the shot clock ran out) · shotRejected { reason } to the shooter alone. The room
-// state (server/src/state.js) has everything else.
+// left) · timeUp { turn, seat, result } (the shot clock ran out) · shotRejected { reason } to the shooter alone ·
+// aim { turn, seat, weapon, yaw, pitch } to everyone but the shooter. The room state (server/src/state.js) has
+// everything else.
+
+// The shooter sends their aim at most this often while they pick a weapon and aim, and at least once a second
+export const AIM_EVERY_MS = 100, AIM_REPEAT_MS = 1000;
+// A shooter's live aim as the server passes it on, or null if it is not one: weapon an index into WEAPONS, yaw and pitch
+// finite numbers. Nothing else goes on. It only shows the others where the shooter is aiming; shots never read it.
+export function cleanAim(msg) {
+  const { weapon, yaw, pitch } = msg ?? {};
+  const ok = Number.isInteger(weapon) && weapon >= 0 && weapon < WEAPONS.length && Number.isFinite(yaw) && Number.isFinite(pitch);
+  return ok ? { weapon, yaw, pitch } : null;
+}
 
 // What the shooter is told when the server turns a shot down. reason is match.shoot's error, or 'time' when the shot
 // came after the shot clock ran out.

@@ -20,8 +20,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 8 | Shots decided by the server | `b45f3b0`, `db90594` |
 | 9 | Shot clock | `420b57b`, `7de49b9` |
 | 10 | Disconnects and reconnecting | `a1dc4bc` |
-| 11 | Between holes and the end | done (hash added with step 12) |
-| 12 | Live aim for spectators | to do |
+| 11 | Between holes and the end | `aeb5cd8` |
+| 12 | Live aim for spectators | done (hash added with step 13) |
 | 13 | Game server on Fly.io | to do |
 | 14 | Frontend on Vercel | to do |
 | later | Public quick match | not planned yet |
@@ -72,6 +72,21 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 - Turn order is round-robin, as before; the lowest score on the previous hole tees off first, seat order breaks ties.
 - After a shot, the next turn starts once every screen that got it has watched it land, but at most 10 seconds after
   it lands. A screen that is still showing it then skips ahead; a tab in the background never holds anyone up.
+
+### Live aim
+
+- While the shooter picks a weapon and aims, everyone else watches their character turn, hold the weapon they have
+  picked and tilt it up and down; the camera over the shooter's shoulder follows. When the shot arrives, the aim it was
+  fired at is shown.
+- The shooter's screen sends `aim {turn, weapon, yaw, pitch}` at most 10 times a second when it has changed, and once
+  a second anyway, so a screen that has just reloaded catches up. Yaw is rounded to a thousandth of a radian and pitch
+  to a tenth of a degree. Nothing is sent while the connection is lost: the SDK would keep the messages and send them
+  all at once when it is back.
+- The room passes an aim on only from the player whose turn it is, during that turn, and only its weapon, yaw and pitch
+  (`cleanAim`), with the turn and seat added. It goes to everyone but the shooter. The match never sees it, so it cannot
+  change a shot.
+- The weapon tilts by 60% of the pitch, held within −20° to 50°, and only on the other players' screens, so the
+  one-screen game looks as before.
 
 ### Shot clock and timeouts
 
@@ -162,7 +177,7 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
 | Too many new rooms from one IP | 429 | Too many new rooms from your network. Try again in a few minutes. |
 | Room mode other than private | 400 | Only private rooms are available |
 
-- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 6) is raised whenever messages or room state change in a way an
+- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 7) is raised whenever messages or room state change in a way an
   older client cannot handle.
 - Colyseus disconnects a client that sends a message type the room has no handler for, so a client never sends a
   message before the server handles it.
@@ -181,6 +196,9 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
   room limit could be dodged.
 - **CORS:** Colyseus allows every origin by default. Step 13 limits it to the Vercel domain and localhost.
 - **Load size:** the browser SDK is a separate chunk, loaded only when someone picks Online.
+- **Message flood:** a client that sends more than 30 messages in a second (`maxMessagesPerSecond`) is disconnected,
+  and its seat is held as after any drop. A fair client sends at most 10 aims a second, a few other messages, and the
+  up to 10 the SDK kept while its connection was lost.
 
 ### Testing
 
@@ -416,12 +434,33 @@ again and Ben waits; Play again takes both to the lobby with the same code and n
 first shot plays once on each screen; at the end of that game Ann leaves and Ben gets Play again; a one-screen hole still
 ends with "To hole 2".*
 
-**12. Live aim for spectators (looks only)**
-- The active player sends `aim {weapon, yaw, pitch}` about 10 times a second.
-- The server relays it to the others, limited per client (`maxMessagesPerSecond`), and never uses it for physics.
-  Spectators see the shooter's character turn.
+**12. Live aim for spectators (looks only)** · done
+- `shareAim()` (`src/game/online.js`) runs every frame online and sends the shooter's aim while they pick a weapon and
+  aim: at most every `AIM_EVERY_MS` (100) when it has changed, and every `AIM_REPEAT_MS` (1000) anyway. The remote
+  match's `aim()` adds the turn and sends nothing while the connection is lost.
+- The room's `relayAim` checks the sender, the phase and the turn, cleans the aim with `cleanAim`
+  (`src/core/protocol.js`) and broadcasts `aim {turn, seat, weapon, yaw, pitch}` to everyone but the sender. The room
+  disconnects a client that sends more than `MAX_MESSAGES_PER_SECOND` (30) messages in a second.
+- A screen watching that turn (`watch`) takes the aim as its own yaw, pitch and weapon: the shooter's character turns
+  to the yaw (as before, from `state.yaw`), shows the weapon, and the camera over their shoulder follows. A new
+  `hold` tilt on the character shows the pitch on the other players' screens. When the shot arrives, its aim is shown
+  the same way, so the character faces where the shot really went.
+- `PROTOCOL_VERSION` is now 7: a client that sends `aim` to an older server would be disconnected for a message type
+  it has no handler for.
 
-*Test: a second window shows the shooter turning live; blocking these messages changes no shot results.*
+*Test: integration tests check that the shooter's aim reaches everyone else with the turn and seat added and nothing
+else of it, and not the shooter; that aims from another player, for another turn, with bad numbers or after the shot is
+in go nowhere and get nobody thrown out; that the same seeded match plays exactly the same shot, and ends in the same
+state, whether the shooter swung their aim around 20 times first or not; and that a client sending ten aims a second
+stays while one sending more than 30 messages in a second is dropped. The whole-game tests lift the limit, since their
+bot plays dozens of turns a second. In headless Edge (Ann on a computer, Ben on a phone-sized screen, over the Wi-Fi
+address): Ann picks the shotgun instead of the recommended bazooka and Ben sees it in her hands; she turns with the
+arrow key and Ben's screen turns with her as she does, never more than a quarter radian behind, ending on her aim, with
+her character facing it and his camera looking along it; she sends 10–14 frames in 1.5 seconds of turning and 2–3 in 3
+seconds of holding still; she raises her aim and her weapon tilts up on Ben's screen but not on hers; Ben reloads and
+has her aim and weapon again within a second; her shot plays on Ben's screen along the aim she fired at and her ball
+ends where the server put it. With Ben's aims blocked on his turn, Ann sees him unchanged, and his shot still plays with
+his real aim and weapon and ends where the server put it. A one-screen turn shows no tilt.*
 
 ### Phase D: deploy (to do)
 

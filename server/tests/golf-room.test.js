@@ -1,16 +1,18 @@
 // The golf room through the real browser SDK: private rooms by code, the lobby, starting, turning requests down, the
-// match in the room state, taking a seat back after a reload, shots and the shot clock.
+// match in the room state, taking a seat back after a reload, shots and the shot clock, between holes and the end, and
+// the shooter's live aim.
 import { isDeepStrictEqual } from 'node:util';
 import { Client } from '@colyseus/sdk';
 import { boot } from '@colyseus/testing';
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
-import { courseModel } from '../../src/core/match.js';
+import { rng } from '../../src/core/math.js';
+import { courseModel, makeMatch } from '../../src/core/match.js';
 import { STEP } from '../../src/core/physics.js';
 import { CODE_ALPHABET, PROTOCOL_VERSION, REJECT, ROOM_NAME, unpackShot } from '../../src/core/protocol.js';
 import { WEAPONS, widx } from '../../src/core/weapons.js';
 import { readMatch } from '../../src/net/remoteMatch.js';
 import { server } from '../src/app.js';
-import { CREATE_LIMIT, resetCreateLimits } from '../src/GolfRoom.js';
+import { CREATE_LIMIT, MAX_MESSAGES_PER_SECOND, resetCreateLimits } from '../src/GolfRoom.js';
 import { writeMatch } from '../src/state.js';
 
 let colyseus;
@@ -639,10 +641,12 @@ describe('shot clock', () => {
 });
 
 describe('between holes and the end', () => {
-  // A game whose room shows the scorecard for only a second between holes
+  // A game whose room shows the scorecard for only a second between holes. The bot plays dozens of turns a second, so
+  // each screen sends far more messages than a person could, and the room must not drop it for that.
   async function quickGame(...names) {
     const rooms = await startGame(...names), room = serverRoom(rooms[0]);
     room.betweenSeconds = 1;
+    room.maxMessagesPerSecond = Infinity;
     return { rooms, room };
   }
 
@@ -725,4 +729,63 @@ describe('between holes and the end', () => {
     await until(dee, st => st.seats.length === 2);
     expect(seats(dee.state)).toEqual([{ name: 'Ann', style: 0, connected: true }, { name: 'Dee', style: 1, connected: true }]);
   }, 30000);
+});
+
+describe('live aim', () => {
+  // The i-th aim of a shooter swinging around in this turn
+  const aimAt = (turn, i = 0) => ({ turn, weapon: i % WEAPONS.length, yaw: 0.25 * i, pitch: 5 + i });
+
+  test('the shooter\'s aim reaches everyone else with the turn and seat, and nothing else of it', async () => {
+    const [ann, ben, cy] = await startGame('Ann', 'Ben', 'Cy');
+    const got = [received(ann, 'aim'), received(ben, 'aim'), received(cy, 'aim')];
+    ann.send('aim', { turn: 1, weapon: 2, yaw: 0.5, pitch: 12, note: '<b>hi</b>' });
+    await untilTrue(() => got[1].length === 1 && got[2].length === 1, 'the aim reaches Ben and Cy');
+    expect(got[1][0]).toEqual({ turn: 1, seat: 0, weapon: 2, yaw: 0.5, pitch: 12 });
+    expect(got[2][0]).toEqual(got[1][0]);
+    await wait(150);
+    expect(got[0]).toEqual([]); // not back to Ann
+  });
+
+  test('aims from anyone but the shooter, for another turn, with bad numbers or once the shot is in go nowhere', async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben'), room = serverRoom(ann), got = [received(ann, 'aim'), received(ben, 'aim')];
+    ben.send('aim', aimAt(1)); // not his turn
+    for (const bad of [aimAt(2), { ...aimAt(1), weapon: WEAPONS.length }, { ...aimAt(1), yaw: 'left' }, { ...aimAt(1), pitch: null }, { turn: 1 }, null, 'aim']) ann.send('aim', bad);
+    ann.send('shoot', { weapon: widx('dart'), yaw: 0, pitch: -60, power: 0.1, turn: 1 }); // lands at once
+    await untilTrue(() => room.match.state.phase === 'settle', 'the shot is in');
+    ann.send('aim', aimAt(1));
+    await wait(200);
+    expect(got.flat()).toEqual([]);
+    expect([ann.connection.isOpen, ben.connection.isOpen]).toEqual([true, true]); // ignored, not thrown out
+  });
+
+  test('aims never change a shot: the same seeded match plays the same shot with or without them', async () => {
+    async function seeded() {
+      const [ann, ben] = await startGame('Ann', 'Ben'), room = serverRoom(ann);
+      room.match = makeMatch(['Ann', 'Ben'], rng(42));
+      room.sync();
+      await inStep(ben, room.match.state);
+      return { ann, ben, room, shots: received(ben, 'shotResult') };
+    }
+    const swung = await seeded(), still = await seeded(), seen = received(swung.ben, 'aim');
+    expect(JSON.stringify(swung.room.match.state)).toBe(JSON.stringify(still.room.match.state));
+    // In the first room Ann swings her aim around for two seconds before she fires; in the second she fires at once
+    for (let i = 0; i < 20; i++) { swung.ann.send('aim', aimAt(1, i)); await wait(100); }
+    await untilTrue(() => seen.length === 20, 'every aim reaches Ben');
+    const aim = botAim(swung.room.match.state);
+    for (const g of [swung, still]) g.ann.send('shoot', aim);
+    await untilTrue(() => swung.shots.length === 1 && still.shots.length === 1, 'both shots arrive');
+    expect(swung.shots[0]).toEqual(still.shots[0]);
+    expect(JSON.stringify(swung.room.match.state)).toBe(JSON.stringify(still.room.match.state));
+  });
+
+  test(`a client that sends ten aims a second stays; one that sends more than ${MAX_MESSAGES_PER_SECOND} messages in a second is dropped`, async () => {
+    const [ann, ben] = await startGame('Ann', 'Ben'), seen = received(ben, 'aim');
+    for (let i = 0; i < 15; i++) { ann.send('aim', aimAt(1, i)); await wait(100); }
+    await untilTrue(() => seen.length === 15, 'every aim reaches Ben');
+    expect(ann.connection.isOpen).toBe(true);
+    ann.reconnection.enabled = false;
+    for (let i = 0; i < MAX_MESSAGES_PER_SECOND + 10; i++) ann.send('aim', aimAt(1, i));
+    await until(ben, s => !s.seats[0].connected);
+    expect(ann.connection.isOpen).toBe(false);
+  });
 });

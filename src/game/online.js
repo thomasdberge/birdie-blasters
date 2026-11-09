@@ -1,12 +1,14 @@
 // Plays an online match on screen. The server runs the match and the room state says where it stands; the screen shows
 // it through the same display copies as the one-screen game, and plays each shot when its result arrives.
 
-import { SHOT_REJECTED } from '../core/protocol.js';
+import { AIM_EVERY_MS, AIM_REPEAT_MS, SHOT_REJECTED } from '../core/protocol.js';
+import { WEAPONS } from '../core/weapons.js';
 import { labelFont } from '../platform.js';
 import { remoteMatch } from '../net/remoteMatch.js';
 import { aimAgain, cancelCharge, playShot, showChoice } from './shot.js';
 import { game, state, timers } from './state.js';
 import { beginTurn, endHole, leaveGame, setPlayers, showHole, turnTimedOut } from './turns.js';
+import { showWeapon } from '../render/characters.js';
 import { removeShotVisuals } from '../render/projectiles.js';
 import { ui } from '../ui/elements.js';
 import { setControls, toast } from '../ui/hud.js';
@@ -14,17 +16,18 @@ import { refreshBoard } from '../ui/scorecard.js';
 
 // seen: per seat, what this screen last knew of it ({ connected, out, left }) · away: per seat, when this screen's
 // countdown for a player who lost the connection ends · offline: this player's own connection is lost · games: counts
-// the games this screen has played, so nothing from an earlier one gets through · stops: stop listening to the room
-let ready = false, shown = null, clock = null, seen = [], away = [], offline = false, games = 0, stops = [];
+// the games this screen has played, so nothing from an earlier one gets through · stops: stop listening to the room ·
+// aimSent: the aim this player last sent ({ key, at })
+let ready = false, shown = null, clock = null, seen = [], away = [], offline = false, games = 0, stops = [], aimSent = { key: '', at: 0 };
 // joined: a room whose game has started. When the host plays again after the last hole, the room goes back to the
 // lobby and its next game starts here again.
 export async function playOnline(joined) {
   const g = ++games;
-  ready = false; shown = { hole: -1, turn: -1, over: false }; clock = null; seen = []; away = []; offline = false;
+  ready = false; shown = { hole: -1, turn: -1, over: false }; clock = null; seen = []; away = []; offline = false; aimSent = { key: '', at: 0 };
   const live = () => ready && games === g;
   const match = remoteMatch(joined, {
     shot: m => { if (live()) shotArrived(m); }, chosen: m => { if (live()) choiceArrived(m); },
-    timeUp: m => { if (live()) timeUp(m); }, rejected: m => { if (live()) shotRejected(m); }
+    timeUp: m => { if (live()) timeUp(m); }, rejected: m => { if (live()) shotRejected(m); }, aim: m => { if (live()) aimArrived(m); }
   });
   game.match = match;
   game.online = { seat: [...joined.state.seats].findIndex(s => s.sessionId === joined.sessionId) };
@@ -66,6 +69,16 @@ export function holdControls() {
   cancelCharge();
   if (!ui.fire.disabled) setControls(false);
   if (!ui.choose.hidden) ui.choose.hidden = true;
+}
+// Every frame online. While this player picks a weapon and aims, the others watch their character turn: the aim goes out
+// at most every AIM_EVERY_MS when it has changed, and every AIM_REPEAT_MS anyway, for a screen that has just come back.
+export function shareAim(now) {
+  if (!ready || offline || state.cur !== game.online.seat || (state.phase !== 'pick' && state.phase !== 'aim')) return;
+  const aim = { weapon: state.weapon, yaw: Math.round(state.yaw * 1000) / 1000, pitch: Math.round(state.pitch * 10) / 10 };
+  const key = `${shown.turn} ${aim.weapon} ${aim.yaw} ${aim.pitch}`, since = now - aimSent.at;
+  if (since < AIM_EVERY_MS || (key === aimSent.key && since < AIM_REPEAT_MS)) return;
+  aimSent = { key, at: now };
+  game.match.aim(aim);
 }
 // Who has lost the connection, for the HUD: { name, color, ms } with the milliseconds they have left to come back, and
 // ms null for this player while their own connection is lost
@@ -126,6 +139,7 @@ function showWaiting(ms) {
 // The room state already has the shot (it is sent after the state patch), so the match on screen is ahead of the display
 // copies, just as on one screen
 function shotArrived(m) {
+  if (m.shooter !== game.online.seat) showAim(m.shooter, m.aim); // where the shot really went
   playShot(m.shooter, m.aim, m.shot, m.result);
   if (document.hidden) game.match.next();
 }
@@ -139,6 +153,16 @@ function timeUp(m) {
   if (m.turn !== shown.turn) return;
   turnTimedOut(m.seat, m.result);
   if (document.hidden) game.match.next();
+}
+
+// The shooter's live aim, while this screen watches their turn: their character turns and holds that weapon, and the
+// camera over their shoulder follows
+function aimArrived(m) {
+  if (m.turn === shown.turn && m.seat === state.cur && state.phase === 'watch') showAim(m.seat, m);
+}
+function showAim(seat, { weapon, yaw, pitch }) {
+  Object.assign(state, { weapon, yaw, pitch });
+  showWeapon(state.players[seat].char, WEAPONS[weapon].id);
 }
 
 // The server turned this player's shot down. It answers after the state patch, so the room state says whether the turn
