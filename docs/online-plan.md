@@ -19,8 +19,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 7 | The server runs the match | `51c8609` |
 | 8 | Shots decided by the server | `b45f3b0`, `db90594` |
 | 9 | Shot clock | `420b57b`, `7de49b9` |
-| 10 | Disconnects and reconnecting | done (hash added with step 11) |
-| 11 | Between holes and the end | to do |
+| 10 | Disconnects and reconnecting | `a1dc4bc` |
+| 11 | Between holes and the end | done (hash added with step 12) |
 | 12 | Live aim for spectators | to do |
 | 13 | Game server on Fly.io | to do |
 | 14 | Frontend on Vercel | to do |
@@ -113,7 +113,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 - If everyone who still has to finish the hole is disconnected, the match waits (phase `waiting`) until one of them
   reconnects or their seat expires. Screens say who they are waiting for.
 - After 60 seconds the player is out for the rest of the match: no more turns, "—" on the scorecard for the remaining
-  holes, not ranked. Scores of holes they finished are kept.
+  holes and their total, not ranked. Scores of holes they finished are kept. One who leaves after finishing the last
+  hole is still ranked.
 - "Leave game" on the online scorecard (tap the hole card) frees the seat at once; while the game is on it asks once
   more ("Leave for good?"). Pressed while the connection is lost, it takes the tab back to the start at once, and the
   seat is given up when its 60 seconds run out.
@@ -133,8 +134,13 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 - The room locks when the host starts, so nobody joins a game in progress.
 - Start rule: in development the host may start alone; in production (`NODE_ENV=production`) at least 2 players are
   needed. The minimum is part of the room state, so the lobby's Start button follows the server.
-- After the last hole, the host's "Play again" takes everyone back to the lobby with the same code.
-- Between holes everyone sees the scorecard, and the next hole starts after 10 seconds.
+- After the last hole, the host's "Play again" takes everyone back to the lobby with the same code. Only players who are
+  still connected keep their seat and look; one who is away loses the seat, as in the lobby, and their token is turned
+  down. The room opens again for new players, and the next start begins a new match. If the host leaves at the end, the
+  next host gets the button.
+- Between holes everyone sees the scorecard with a countdown, and the next hole starts 10 seconds after the hole ended
+  (once every screen has watched its last shot). The room's clock times it as it times turns, but with no grace, since
+  nothing is sent between holes.
 - The room takes a `mode` option. Only `private` exists now; quick match comes later as `public`.
 
 ### Nicknames
@@ -156,7 +162,7 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
 | Too many new rooms from one IP | 429 | Too many new rooms from your network. Try again in a few minutes. |
 | Room mode other than private | 400 | Only private rooms are available |
 
-- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 5) is raised whenever messages or room state change in a way an
+- `PROTOCOL_VERSION` (`src/core/protocol.js`, now 6) is raised whenever messages or room state change in a way an
   older client cannot handle.
 - Colyseus disconnects a client that sends a message type the room has no handler for, so a client never sends a
   message before the server handles it.
@@ -378,16 +384,37 @@ turn; Cy leaves from the scorecard (the first press only asks), is back at the s
 and his character is gone from both courses. The step 7–9 browser tests, the grace test and the one-screen playtest
 still pass. By hand: reload a tab mid-game, and put a phone in airplane mode for 20 seconds.*
 
-**11. Between holes and the end**
-- (Since step 8 the online scorecard after a hole shows no buttons, and since step 10 only "Leave game"; this step adds
-  the countdown and Play again.)
-- In `between`, the room waits 10 seconds and then calls `match.nextHole()`. Clients show the scorecard with a
-  countdown, "—" for players who are out, and no ranking for them.
-- At `end`, the final scorecard. The host's "Play again" sets the room back to the lobby with the same code (unlocked,
-  connected seats kept), and the next start begins a new match.
+**11. Between holes and the end** · done
+- The room's clock also times the scorecard between holes: when the match reaches `between`, `match.clock` is
+  `between` and `timeLeft` counts down from 10 seconds (`BETWEEN_SECONDS`, the room's `betweenSeconds`); then the room
+  calls `match.nextHole()`. No grace here: the next hole starts at the deadline the screens count down to.
+- Screens show the scorecard with "Hole 2 starts in 8 s." and "Leave game". A screen that joins between holes (a
+  reload) or at the end shows the hole and then the scorecard at once.
+- On the scorecard a player who left before finishing the last hole has "—" for the holes they will not play and for
+  their total, and is not ranked. While it is up, the scorecard follows the room: someone leaving, or the host changing.
+- At `end` the host's final scorecard has "Play again"; everyone else's says "Waiting for Ann to play again." The
+  `playAgain` message (host only, only at `end`) turns down the seats Colyseus holds for players who are away, so their
+  tokens no longer work, keeps the connected seats in their order and look, clears the match from the room state
+  (`clearMatch`), sets the phase back to `lobby` and unlocks the room.
+- On screen the lobby takes over again: the game view stops and removes its room listeners (a second game in the same
+  room hears every message once), and the tab drops its rejoin token and turns reconnection off, as in the lobby.
+- The room starts writing `reconnectLeft` every second when it is created, not on every start.
+- `PROTOCOL_VERSION` is now 6.
 
-*Test: a full three-hole game with 2–4 players ends with the same scorecard in every window; Play again returns
-everyone to the lobby.*
+*Test: integration tests play whole games with 2, 3 and 4 players through the clients' messages: after each hole every
+client has the `between` clock counting down, the next hole starts when it ends and not before, and every client ends
+with the server's scorecard. Only the host can play again, and only at the end; everyone is then in the lobby with the
+same code, seats and looks, a friend can join, and the next start begins a new match whose first shot arrives. Playing
+again frees the seat of a player who left and of one who is away, and turns the latter's token down. In headless Edge
+(Ann and Cy on computers, Ben on a phone-sized screen, all over the Wi-Fi address), bots play a whole game: after hole 1
+all three see the same scorecard with countdowns that agree within a second; Ben reloads and is back on it, in step with
+Ann (the test gives this scorecard 30 seconds: a reload with software rendering takes longer than 10); Cy leaves during
+hole 2 (the first press only asks) and afterwards has his hole 1 score, "—" for the rest, no total and no ranking; on
+that scorecard the countdown ticks down second by second and the server starts hole 3 ten seconds after hole 2 ended;
+at the end Ann and Ben see the same final scorecard with the server's scores and the right winner, Ann has Play
+again and Ben waits; Play again takes both to the lobby with the same code and no rejoin token; in the next game Ann's
+first shot plays once on each screen; at the end of that game Ann leaves and Ben gets Play again; a one-screen hole still
+ends with "To hole 2".*
 
 **12. Live aim for spectators (looks only)**
 - The active player sends `aim {weapon, yaw, pitch}` about 10 times a second.
@@ -455,10 +482,10 @@ limit.
 - Tests that import game modules inside the page must import the exact URL the page loaded: after an edit, Vite serves
   the module as `…?t=…`, and a plain import makes a second, unused copy. Once, a test started seconds after an edit
   still got a stale copy; if a hook reads nothing, run the test again.
-- If the game server prints `Restarting 'src/index.js'` with no file edited, something else is touching the files
-  (on the development PC probably the Jottacloud backup of Documents, especially after the PC wakes from standby), and
-  every restart ends the rooms in progress. For browser tests, run the server without watching: `npm start -w server`.
-  A PC going to standby in the middle of a browser test also fails it; rerun it on a fresh headless Edge.
+- A PC going to standby in the middle of a browser test fails it; rerun it on a fresh headless Edge.
+- A browser test can run the game server in its own process: import `server/src/app.js` and `listen` from
+  `@colyseus/tools` on port 2567. It can then reach a room with `matchMaker.getLocalRoomById(code)`, time it and
+  fast-forward its match.
 - Network drops in browser tests: CDP `Network.emulateNetworkConditions` with `offline: true` fires the page's
   `offline` event, and the SDK closes its socket at once; the server notices at once if the close frame gets out, and
   otherwise by its ping timeout (about 6 seconds).

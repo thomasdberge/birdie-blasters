@@ -224,6 +224,8 @@ table.sc{width:100%;border-collapse:collapse;font-family:var(--font-data);font-v
 .sc-legend .mk{width:16px;height:16px;margin-right:5px;vertical-align:middle}
 .sc-actions{display:flex;gap:10px;flex-wrap:wrap}
 .sc-actions .btn-primary{flex:1}
+.sc-note{flex:1 1 auto;align-self:center;margin:0;font-size:14.5px;line-height:1.4;color:var(--print-soft);font-variant-numeric:tabular-nums}
+.sc tr.out th,.sc tr.out td{color:var(--print-soft)}
 
 @media (prefers-reduced-motion:reduce){
   .callout.show{animation:fade 2.6s linear forwards}

@@ -89,6 +89,13 @@ function gone(message) {
   if (playing) { playing = false; stopOnline(); }
   backToSetup(message);
 }
+// The host played again after the last hole: the game ends and the lobby is back, with the same code. The lobby holds no
+// seat for anyone who drops out, so there is nothing to rejoin.
+function backToLobby() {
+  playing = false; stopOnline();
+  session.remove(REJOIN_KEY); room.reconnection.enabled = false;
+  el.setup.hidden = true; el.lobby.hidden = false; el.link.hidden = true; el.inviteBtn.textContent = inviteLabel();
+}
 function backToSetup(message) {
   history.replaceState(null, '', location.pathname);
   el.lobby.hidden = true; el.setup.hidden = false;
@@ -110,6 +117,7 @@ function render(s) {
     if (!playing) { playing = true; el.lobby.hidden = true; room.reconnection.enabled = true; remember(); playOnline(room); }
     return;
   }
+  if (playing) backToLobby();
   const me = room.sessionId, seats = [...s.seats], isHost = s.host === me;
   el.roomCode.textContent = s.code;
   const rows = seats.map(seat => playerRow(seat, seat.sessionId === s.host, seat.sessionId === me));

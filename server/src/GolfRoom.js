@@ -6,7 +6,7 @@ import { matchMaker, Room, ServerError } from '@colyseus/core';
 import { makeMatch, MAX_SEATS } from '../../src/core/match.js';
 import { STEP } from '../../src/core/physics.js';
 import { cleanName, makeRoomCode, NAME_MAX, packShot, PROTOCOL_VERSION, REJECT } from '../../src/core/protocol.js';
-import { GolfState, Seat, writeMatch } from './state.js';
+import { clearMatch, GolfState, Seat, writeMatch } from './state.js';
 
 // How long a player who dropped out of a game in progress keeps their seat; after that they are out of the match
 export const RECONNECT_SECONDS = 60;
@@ -14,10 +14,14 @@ export const RECONNECT_SECONDS = 60;
 export const REPLAY_MARGIN = 10;
 // The shot clock: seconds for a turn, and for picking the rifle bullet that counts
 export const TURN_SECONDS = 30, CHOOSE_SECONDS = 15;
+// How long the scorecard stays up between holes before the next hole starts
+export const BETWEEN_SECONDS = 10;
 // Screens count down to 0 at the deadline, but the room still takes a shot or a rifle choice this many seconds after it.
 // A screen's countdown runs behind the server's by a network delay and a shot needs another to arrive, so one sent while
 // the screen still showed time left is not lost to latency. Screens let nothing be sent once they reach 0.
 export const GRACE_SECONDS = 0.5;
+// The clock for each match phase that has one: the room's setting with its length in seconds
+const SECONDS = { turn: 'turnSeconds', choose: 'chooseSeconds', between: 'betweenSeconds' };
 
 // At most CREATE_LIMIT new rooms per IP address in any CREATE_WINDOW_MS
 export const CREATE_LIMIT = 10, CREATE_WINDOW_MS = 10 * 60 * 1000;
@@ -62,9 +66,10 @@ export class GolfRoom extends Room {
   replayMargin = REPLAY_MARGIN;
   turnSeconds = TURN_SECONDS;
   chooseSeconds = CHOOSE_SECONDS;
+  betweenSeconds = BETWEEN_SECONDS;
   graceSeconds = GRACE_SECONDS;
   reconnectSeconds = RECONNECT_SECONDS;
-  // sessionId -> when the seat of a player who dropped out is given up
+  // sessionId -> { until, held } for a player who dropped out: when their seat is given up, and the seat Colyseus holds
   away = new Map();
 
   // Runs for every matchmaking request (create, join by code), before a room is made or a seat reserved
@@ -88,6 +93,8 @@ export class GolfRoom extends Room {
     this.onMessage('shoot', (client, aim) => this.shoot(client, aim));
     this.onMessage('chooseBullet', (client, msg) => this.chooseBullet(client, msg));
     this.onMessage('replayDone', (client, msg) => { if (msg?.turn === this.replay?.turn) this.watched(client.sessionId); });
+    this.onMessage('playAgain', client => this.playAgain(client));
+    this.clock.setInterval(() => this.writeAway(), 1000);
   }
 
   onJoin(client, options) {
@@ -104,9 +111,10 @@ export class GolfRoom extends Room {
   onDrop(client) {
     const i = this.seatIndex(client);
     if (this.state.phase !== 'playing' || i < 0) return;
-    // Turned down only when the room is closing; Colyseus then calls onLeave at once
-    this.allowReconnection(client, this.reconnectSeconds).catch(() => {});
-    this.away.set(client.sessionId, Date.now() + this.reconnectSeconds * 1000);
+    // Turned down when the room is closing, or when the host plays again; Colyseus then calls onLeave
+    const held = this.allowReconnection(client, this.reconnectSeconds);
+    held.catch(() => {});
+    this.away.set(client.sessionId, { until: Date.now() + this.reconnectSeconds * 1000, held });
     this.writeAway();
     this.seatChange(() => this.match.setConnected(i, false));
     this.passHost(client.sessionId);
@@ -141,7 +149,7 @@ export class GolfRoom extends Room {
   }
   // Clients count down from reconnectLeft, as from the shot clock
   writeAway() {
-    for (const s of this.state.seats) if (this.away.has(s.sessionId)) s.reconnectLeft = Math.max(0, Math.round(this.away.get(s.sessionId) - Date.now()));
+    for (const s of this.state.seats) if (this.away.has(s.sessionId)) s.reconnectLeft = Math.max(0, Math.round(this.away.get(s.sessionId).until - Date.now()));
   }
   // A player who dropped out is back, or gone for good
   back(sessionId) {
@@ -190,18 +198,19 @@ export class GolfRoom extends Room {
     this.settled();
   }
 
-  // Copies the match into the room state, and starts the shot clock when a turn or a rifle choice begins (wait seconds
-  // later); anything else stops it. Time runs out at the deadline on screen, and graceSeconds later in the room.
+  // Copies the match into the room state, and starts the clock when a turn, a rifle choice (wait seconds later) or the
+  // scorecard between holes begins; anything else stops it. A turn or a choice runs out at the deadline on screen, and
+  // graceSeconds later in the room; the next hole starts at the deadline.
   sync(wait = 0) {
-    const ms = this.match.state, of = ms.phase === 'turn' || ms.phase === 'choose' ? ms.phase : '', key = of && `${of} ${ms.turn}`;
+    const ms = this.match.state, of = SECONDS[ms.phase] ? ms.phase : '', key = of && `${of} ${ms.turn}`;
     writeMatch(this.state, ms);
     if (key === (this.timer?.key ?? '')) return;
     this.timer?.expire.clear(); this.timer?.tick.clear();
     this.timer = null;
     Object.assign(this.state.match, { clock: of, timeLeft: 0 });
     if (!of) return;
-    const deadline = Date.now() + (wait + (of === 'turn' ? this.turnSeconds : this.chooseSeconds)) * 1000;
-    this.timer = { key, deadline, closes: deadline + this.graceSeconds * 1000, tick: this.clock.setInterval(() => this.writeTimeLeft(), 1000) };
+    const deadline = Date.now() + (wait + this[SECONDS[of]]) * 1000, grace = of === 'between' ? 0 : this.graceSeconds;
+    this.timer = { key, deadline, closes: deadline + grace * 1000, tick: this.clock.setInterval(() => this.writeTimeLeft(), 1000) };
     this.expireAt(this.timer.closes);
     this.writeTimeLeft();
   }
@@ -213,10 +222,14 @@ export class GolfRoom extends Room {
   // The timeout can also come a little late. Anything a player sends after the time is up is late however soon the
   // timeout would have come.
   checkClock() { if (this.timer && Date.now() >= this.timer.closes) this.timeUp(); }
-  // The shot clock ran out: the turn passes with a penalty stroke, or the rifle bullet nearest the cup counts
+  // The clock ran out: the turn passes with a penalty stroke, the rifle bullet nearest the cup counts, or the next hole
+  // starts
   timeUp() {
     const ms = this.match.state, turn = ms.turn;
-    if (ms.phase === 'turn') {
+    if (ms.phase === 'between') {
+      this.match.nextHole();
+      this.sync();
+    } else if (ms.phase === 'turn') {
       const seat = ms.cur, r = this.match.timeout();
       this.timedOut = turn;
       this.sync();
@@ -259,9 +272,21 @@ export class GolfRoom extends Room {
     // Seats keep their lobby order, so seat i in the room is seat i in the match
     this.match = makeMatch(this.state.seats.map(s => s.name), Math.random);
     this.sync();
-    this.clock.setInterval(() => this.writeAway(), 1000);
     this.state.phase = 'playing';
     await this.lock(); // nobody joins a game in progress
+  }
+
+  // After the last hole the host takes everyone back to the lobby, with the same code. Only players who are still
+  // connected keep their seat: one who is away loses it, as in the lobby, and a reconnection token of theirs is turned
+  // down. The room opens again for new players, and the next start begins a new match.
+  async playAgain(client) {
+    if (this.match?.state.phase !== 'end' || client.sessionId !== this.state.host) return;
+    for (const { held } of this.away.values()) held.reject(new ServerError(410, 'the game is over'));
+    this.away.clear();
+    this.match = null; this.replay = null; this.timedOut = undefined;
+    clearMatch(this.state);
+    this.state.phase = 'lobby';
+    await this.unlock();
   }
 }
 

@@ -23,18 +23,22 @@ export function readMatch(rs) {
 // room: a joined room from the browser SDK. The server answers actions with messages (see src/core/protocol.js):
 // on.shot({ turn, shooter, aim, shot, result }) for every shot, on.chosen({ turn, k, result, timeUp, gone }) for a rifle
 // choice, on.timeUp({ turn, seat, result }) when the shot clock runs out, on.rejected({ reason }) when it turns this
-// player's shot down.
+// player's shot down. close() stops listening, when the room goes back to the lobby or is left.
 export function remoteMatch(room, on) {
   let shotTurn = -1, watchedTurn = -1;
-  room.onMessage('shotResult', m => { shotTurn = m.turn; on.shot({ ...m, shot: unpackShot(m.shot) }); });
-  room.onMessage('timeUp', m => { shotTurn = m.turn; on.timeUp(m); });
-  room.onMessage('bulletChosen', m => on.chosen(m));
-  room.onMessage('shotRejected', m => on.rejected(m));
+  const offs = [
+    room.onMessage('shotResult', m => { shotTurn = m.turn; on.shot({ ...m, shot: unpackShot(m.shot) }); }),
+    room.onMessage('timeUp', m => { shotTurn = m.turn; on.timeUp(m); }),
+    room.onMessage('bulletChosen', m => on.chosen(m)),
+    room.onMessage('shotRejected', m => on.rejected(m))
+  ];
   return {
     get state() { return readMatch(room.state); },
-    // The shot clock: what it times ('turn', 'choose' or '' when stopped) and the milliseconds it had left when the
-    // server last wrote it (about once a second)
+    // The room's clock: what it times ('turn', 'choose', 'between' or '' when stopped) and the milliseconds it had left
+    // when the server last wrote it (about once a second)
     get clock() { return { of: room.state.match.clock, left: room.state.match.timeLeft }; },
+    // The host's seat, or -1 while there is none (everyone has lost the connection)
+    get host() { return [...room.state.seats].findIndex(s => s.sessionId === room.state.host); },
     // Per seat, the milliseconds a player who lost the connection has left to come back (0 for everyone else), as the
     // server last wrote them (about once a second)
     get reconnectLeft() { return [...room.state.seats].map(s => s.reconnectLeft); },
@@ -46,6 +50,9 @@ export function remoteMatch(room, on) {
     next() {
       if (shotTurn >= 0 && watchedTurn !== shotTurn) { watchedTurn = shotTurn; room.send('replayDone', { turn: shotTurn }); }
       return {};
-    }
+    },
+    // The host, after the last hole: everyone goes back to the lobby, with the same code
+    playAgain() { room.send('playAgain'); },
+    close() { for (const off of offs) off(); }
   };
 }

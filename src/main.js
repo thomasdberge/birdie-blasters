@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { STEP } from './core/physics.js';
 import { $ } from './platform.js';
 import { applyHolds, holds } from './game/aim.js';
-import { awayList, holdControls, initOnline, shotClockLeft } from './game/online.js';
+import { awayList, holdControls, initOnline, nextHoleLeft, shotClockLeft } from './game/online.js';
 import { playShotStep } from './game/shot.js';
 import { clock, distToCup, game, state, timers, world } from './game/state.js';
 import { cam, fpView, updateCamera } from './render/camera.js';
@@ -23,6 +23,7 @@ import { initLobby } from './ui/lobby.js';
 import { buildMapStatic, drawMap, sizeMap } from './ui/minimap.js';
 import { initPointerLock, updateLockUI } from './ui/pointerLock.js';
 import { updateReticle } from './ui/reticle.js';
+import { setNextHoleClock } from './ui/scorecard.js';
 import { initSetup } from './ui/setup.js';
 
 const tmpV = new THREE.Vector3();
@@ -59,7 +60,7 @@ function frame(now) {
   for (const p of state.players) p.char.label.scale.set(0.15 * inv, 0.0375 * inv, 1);
   if (world.flag) world.flag.marker.scale.set(0.05 * inv, 0.05 * inv, 1);
   updateReticle();
-  if (inGame) { updateWindHUD(); updateLandMark(); updateLockUI(); setClock(game.online ? shotClockLeft() : null); setAway(game.online ? awayList() : []); }
+  if (inGame) { updateWindHUD(); updateLandMark(); updateLockUI(); setClock(game.online ? shotClockLeft() : null); setAway(game.online ? awayList() : []); setNextHoleClock(game.online ? nextHoleLeft() : null); }
   if (inGame && (mapTick++ % 2 === 0)) drawMap();
   if (state.phase === 'aim' && (mapTick % 6 === 0)) { const p = state.players[state.cur]; if (p) $('#hcDist').textContent = Math.round(distToCup(p)); }
   renderer.clear();

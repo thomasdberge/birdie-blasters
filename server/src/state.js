@@ -24,9 +24,10 @@ export const Seat = schema({
   scores: t.array('uint8') // one per hole, 0 while not played (a real score is at least 1)
 }, 'Seat');
 
-// Where the match stands (src/core/match.js): its phase, the hole, the turn count, whose turn it is (-1: nobody's), the
-// wind. The shot clock is the room's: clock is what it times ('turn', 'choose' for a rifle choice, '' when it is
-// stopped) and timeLeft the milliseconds left when it was last written, about once a second.
+// Where the match stands (src/core/match.js): its phase ('' when there is no match), the hole, the turn count, whose turn
+// it is (-1: nobody's), the wind. The clock is the room's: clock is what it times ('turn', 'choose' for a rifle choice,
+// 'between' for the scorecard before the next hole, '' when it is stopped) and timeLeft the milliseconds left when it
+// was last written, about once a second.
 export const Match = schema({
   phase: t.string().default(''),
   hole: t.uint8().default(0),
@@ -37,7 +38,8 @@ export const Match = schema({
   timeLeft: t.uint32().default(0)
 }, 'Match');
 
-// phase: 'lobby' while players gather, 'playing' once the host has started
+// phase: 'lobby' while players gather, 'playing' once the host has started, and 'lobby' again when the host plays again
+// after the last hole
 export const GolfState = schema({
   phase: t.string().default('lobby'),
   code: t.string(),
@@ -60,5 +62,13 @@ export function writeMatch(room, ms) {
     seat.strokes = s.strokes; seat.done = s.done; seat.picked = s.picked; seat.out = s.out; seat.connected = s.connected;
     s.scores.forEach((v, k) => { seat.scores[k] = v ?? 0; });
   });
+}
+// Back to the lobby: only the seats of players who are still connected stay, as they were before the match, and there
+// is no match
+export function clearMatch(room) {
+  const keep = room.seats.filter(s => s.connected).map(s => new Seat({ sessionId: s.sessionId, name: s.name, style: s.style }));
+  room.seats.clear();
+  room.seats.push(...keep);
+  room.match = new Match();
 }
 function setFields(target, from) { for (const k of Object.keys(from)) target[k] = from[k]; }

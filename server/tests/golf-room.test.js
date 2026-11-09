@@ -87,6 +87,21 @@ async function passTurn(room, screens) {
   for (const s of screens) s.send('replayDone', { turn });
   await untilTrue(() => room.match.state.turn > turn, `turn ${turn} passes`);
 }
+// Plays the room's match with the bot through the clients' messages until done(match state) says so. clients: one per
+// seat; whoever's turn it is fires, the rifle's shooter picks the first bullet, and every screen still connected says it
+// has watched each turn. Between holes it waits for the room to start the next one.
+async function playUntil(room, clients, done) {
+  const ms = room.match.state;
+  for (let n = 0; !done(ms); n++) {
+    if (n > 600) throw new Error('the game did not finish');
+    const { phase, turn, hole } = ms;
+    if (phase === 'turn') clients[ms.cur].send('shoot', botAim(ms));
+    else if (phase === 'choose') clients[ms.choice.seat].send('chooseBullet', { k: 0 });
+    else if (phase === 'settle') for (const c of clients) if (c.connection.isOpen) c.send('replayDone', { turn });
+    await untilTrue(() => ms.phase !== phase || ms.turn !== turn || ms.hole !== hole || done(ms), `${phase} in turn ${turn} ends`, 15000);
+  }
+}
+const scorecard = room => readMatch(room.state).seats.map(s => [s.name, s.scores]);
 
 describe('private rooms', () => {
   test('creating a room gives a 5-character code, and the creator is host in seat 1', async () => {
@@ -443,7 +458,8 @@ describe('shots', () => {
     const [ann, ben] = await startGame('Ann', 'Ben');
     const room = serverRoom(ann), got = [received(ann, 'shotResult'), received(ben, 'shotResult')], strokesThen = [];
     ben.onMessage('shotResult', () => strokesThen.push(readMatch(ben.state).seats[0].strokes));
-    const aim = botAim(room.match.state);
+    // A little wide of the cup: aimed straight at it, the grenade goes in about one time in fifteen
+    const bot = botAim(room.match.state), aim = { ...bot, yaw: bot.yaw + 0.1 };
     ann.send('shoot', aim);
     await untilTrue(() => got.every(g => g.length === 1), 'the shot reaches both');
     const [a, b] = got.map(g => g[0]), ms = room.match.state, shot = unpackShot(a.shot);
@@ -620,4 +636,93 @@ describe('shot clock', () => {
     expect(readMatch(ben.state).seats[0].ball).toEqual(shot.projs[candidates[nearest]].rest);
     expect(room.match.state.seats[0].ball).toEqual(shot.projs[candidates[nearest]].rest);
   }, 10000); // the bullets fly for a few seconds first
+});
+
+describe('between holes and the end', () => {
+  // A game whose room shows the scorecard for only a second between holes
+  async function quickGame(...names) {
+    const rooms = await startGame(...names), room = serverRoom(rooms[0]);
+    room.betweenSeconds = 1;
+    return { rooms, room };
+  }
+
+  test.each([2, 3, 4])('a whole game with %i players: each hole starts when the scorecard countdown ends, and every screen ends with the same scorecard', async n => {
+    const { rooms, room } = await quickGame(...['Ann', 'Ben', 'Cy', 'Dee'].slice(0, n));
+    const ms = room.match.state;
+    for (const hole of [0, 1]) {
+      await playUntil(room, rooms, s => s.phase === 'between');
+      const t0 = Date.now();
+      expect(ms.hole).toBe(hole);
+      for (const r of rooms) {
+        const s = await until(r, st => st.match.phase === 'between');
+        expect(s.match.clock).toBe('between');
+        expect(s.match.timeLeft).toBeGreaterThan(800);
+        expect(s.match.timeLeft).toBeLessThanOrEqual(1000);
+        await inStep(r, ms);
+      }
+      await untilTrue(() => ms.hole === hole + 1, `hole ${hole + 2} starts`);
+      const waited = (Date.now() - t0) / 1000;
+      expect(waited).toBeGreaterThan(1 - 0.15); // no grace: the next hole starts when the countdown on screen ends
+      expect(waited).toBeLessThan(1 + 0.5);
+      expect([ms.phase, room.state.match.clock]).toEqual(['turn', 'turn']);
+    }
+    await playUntil(room, rooms, s => s.phase === 'end');
+    expect(ms.seats.every(s => s.scores.every(v => v >= 1))).toBe(true);
+    for (const r of rooms) {
+      await inStep(r, ms);
+      expect(r.state.match.clock).toBe('');
+      expect(scorecard(r)).toEqual(ms.seats.map(s => [s.name, s.scores]));
+    }
+  }, 60000);
+
+  test('only the host plays again, and only after the last hole: everyone goes back to the lobby with the same code', async () => {
+    const { rooms: [ann, ben], room } = await quickGame('Ann', 'Ben'), code = ann.roomId;
+    ann.send('playAgain'); // in the middle of the game
+    await wait(150);
+    expect(ann.state.phase).toBe('playing');
+    await playUntil(room, [ann, ben], s => s.phase === 'end');
+    ben.send('playAgain'); // not the host
+    await wait(150);
+    expect([ann.state.phase, ann.state.match.phase]).toEqual(['playing', 'end']);
+    ann.send('playAgain');
+    for (const r of [ann, ben]) {
+      const s = await until(r, st => st.phase === 'lobby');
+      expect([s.code, s.host, s.match.phase, s.match.clock]).toEqual([code, ann.sessionId, '', '']);
+      expect(seats(s)).toEqual([{ name: 'Ann', style: 0, connected: true }, { name: 'Ben', style: 1, connected: true }]);
+      expect(s.seats.map(x => [x.strokes, x.done, x.scores.length])).toEqual([[0, false, 0], [0, false, 0]]);
+    }
+    // The room is open again: a friend joins with the code, and the next start begins a new match
+    const cy = await join(code, 'Cy');
+    await until(ann, s => s.seats.length === 3);
+    expect(seats(cy.state).map(s => s.style)).toEqual([0, 1, 2]);
+    ann.send('start');
+    for (const r of [ann, ben, cy]) await until(r, s => s.phase === 'playing');
+    const ms = room.match.state;
+    expect([ms.phase, ms.hole, ms.turn, ms.cur]).toEqual(['turn', 0, 1, 0]);
+    expect(ms.seats.map(s => s.name)).toEqual(['Ann', 'Ben', 'Cy']);
+    expect(ms.seats.every(s => s.strokes === 0 && s.scores.every(v => v === null))).toBe(true);
+    for (const r of [ann, ben, cy]) await inStep(r, ms);
+    const got = received(cy, 'shotResult');
+    ann.send('shoot', botAim(ms));
+    await untilTrue(() => got.length === 1, 'the first shot of the new game arrives');
+    expect(await turnedDown(join(code, 'Dee'))).toBeInstanceOf(Error); // locked again
+  }, 30000);
+
+  test('playing again frees the seats of players who left or are away, and turns their tokens down', async () => {
+    const { rooms: [ann, ben, cy], room } = await quickGame('Ann', 'Ben', 'Cy');
+    room.reconnectSeconds = 30;
+    await ben.leave();
+    await until(ann, s => s.seats[1].out);
+    await playUntil(room, [ann, ben, cy], s => s.phase === 'end'); // Ann and Cy play on
+    const token = cy.reconnectionToken;
+    await dropConnection(cy);
+    await until(ann, s => !s.seats[2].connected && s.seats[2].reconnectLeft > 0); // Cy's seat is held
+    ann.send('playAgain');
+    const s = await until(ann, st => st.phase === 'lobby');
+    expect(seats(s)).toEqual([{ name: 'Ann', style: 0, connected: true }]);
+    expect(await turnedDown(colyseus.sdk.reconnect(token))).toBeInstanceOf(Error);
+    const dee = await join(ann.roomId, 'Dee'); // gets the first free look
+    await until(dee, st => st.seats.length === 2);
+    expect(seats(dee.state)).toEqual([{ name: 'Ann', style: 0, connected: true }, { name: 'Dee', style: 1, connected: true }]);
+  }, 30000);
 });
