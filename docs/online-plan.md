@@ -22,8 +22,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 10 | Disconnects and reconnecting | `a1dc4bc` |
 | 11 | Between holes and the end | `aeb5cd8` |
 | 12 | Live aim for spectators | `20c9787`, follow-up with step 13 |
-| 13 | Game server on Railway | built and tested locally; deploying is done by hand (hash added with step 14) |
-| 14 | Frontend on Vercel | to do |
+| 13 | Game server on Railway | `b8a1c7c`, verified on Railway; its room-limit check moved to step 14 |
+| 14 | Frontend on Vercel | ready; the test on Vercel is done by hand (hash added with the merge) |
 | later | Public quick match | not planned yet |
 
 ## Requirements
@@ -49,8 +49,9 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
   `@colyseus/auth`, which depends on a vulnerable `elliptic`, and we need none of it.
 - **Hosting:** the game server on Railway, in EU West (Amsterdam), the region closest to Norway. Railway instead of the
   first plan, Fly.io, because there is already a Railway account: the Trial plan to begin with, Hobby before the game
-  is shared widely. Vercel cannot host the server, because its functions cannot keep WebSockets open. The frontend
-  stays on Vercel and finds the server through `VITE_SERVER_URL`.
+  is shared widely. It runs at `https://birdie-blasters-production.up.railway.app`. Vercel cannot host the server,
+  because its functions cannot keep WebSockets open. The frontend stays on Vercel and finds the server through
+  `VITE_SERVER_URL`.
 - **One instance, rooms in memory:** exactly one server process runs, and deploying it ends games in progress. Fine for
   now; more than one would need Colyseus's Redis driver. Step 13 says how Railway is held to one.
 - **Railway's settings live in its dashboard**, listed in step 13. Its config file in the repo (`railway.json`) is
@@ -212,16 +213,20 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
 
 ### Network and security
 
-- **Server address:** the client uses `VITE_SERVER_URL` when it is set (production). Otherwise it connects to port
-  2567 on the host that served the page, so a phone on the same Wi-Fi reaches the development server.
+- **Server address:** the client uses `VITE_SERVER_URL` when it is set. `.env.production` sets it to the Railway server
+  for every production build: `npm run build`, and Vercel's builds of every branch, so Vercel needs no setting for it.
+  A `VITE_SERVER_URL` in the environment when building wins over the file. Otherwise (`npm run dev`) the client
+  connects to port 2567 on the host that served the page, so a phone on the same Wi-Fi reaches the development server.
 - **`CLIENT_IP_HEADER`:** behind a proxy, names the header that carries the real client IP: `X-Real-IP` on Railway,
   set in the image. Without it, Colyseus uses the first `X-Forwarded-For` entry, which a client can set itself where
   no proxy replaces it, and the per-IP room limit could be dodged.
 - **Which pages may use the server (CORS):** Colyseus allows every origin by default. In production the server answers
   a browser's matchmaking requests only for the pages in `CLIENT_ORIGINS` (comma-separated origins, e.g.
-  `https://birdieblasters.vercel.app`) and pages on localhost (`originAllowed` in `server/src/app.js`), so a copy of
-  the game on another site cannot use it. In development every page may, for phones on the Wi-Fi. A program that is
-  not a browser can still send anything; the room checks are what stop it. In production the server warns at start
+  `https://birdieblasters.vercel.app`; a slash at the end is ignored) and pages on localhost (`originAllowed` in
+  `server/src/app.js`), so a copy of the game on another site cannot use it. On Railway it holds the Vercel production
+  domain and the stable preview domain of the `online` branch (step 14), so online play can be tested before the merge.
+  Vercel's per-deployment URLs are not in it. In development every page may, for phones on the Wi-Fi. A program that
+  is not a browser can still send anything; the room checks are what stop it. In production the server warns at start
   when `CLIENT_ORIGINS` is not set.
 - **Health check:** `GET /health` answers `{ ok, process, rooms, players }`. `process` is this server process's id, so
   asking a few times shows whether more than one is answering; `rooms` and `players` show whether a deploy would end
@@ -501,7 +506,7 @@ Cy 1 m in front of Ben's camera is still hidden while the shot flies.*
 
 ### Phase D: deploy (in progress)
 
-**13. Game server on Railway** · built and tested locally; the deploy is done by hand
+**13. Game server on Railway** · `b8a1c7c`, verified on Railway
 - **Image:** `Dockerfile` at the root, which Railway finds and builds by itself: `node:24-alpine`, only the server
   workspace's production dependencies (`npm ci --omit=dev --workspace=server`: no Three.js or Vite; the browser SDK
   comes along, as the browser needs it too), then `src/core/` and `server/src/`. It runs as the `node` user and starts
@@ -532,7 +537,7 @@ Cy 1 m in front of Ben's camera is still hidden while the shot flies.*
   | Healthcheck path | `/health` |
   | Restart policy | On failure |
   | Public networking | Generate Domain; Railway picks the port the server listens on |
-  | Variables | `CLIENT_ORIGINS`: none until step 14 |
+  | Variables | `CLIENT_ORIGINS`: the two Vercel domains (step 14) |
 
 - **Server:** `GET /health` and the CORS rule (see Network and security). Colyseus's own `/__healthcheck` only says
   "OK".
@@ -549,20 +554,39 @@ site, the same site on `http://`, a look-alike domain or the origin `null` is no
 address is allowed. The image, built with Docker Desktop and run with `PORT=8080`, passes `check-deploy.js` (health,
 one process, CORS, a shot by two players) and stops in 0.7 s with exit code 0 on `docker stop`. Without an edge in
 front, its `--room-limit` check fails as it should: 11 rooms with forged headers. Ten four-player bot games for two
-minutes: memory 45 → 52 MiB, CPU at most 1.4% of one core, 6 MB sent. To do by hand, after the deploy:
-`check-deploy.js` passes against the Railway address, with `--room-limit` last; a local client
-(`VITE_SERVER_URL=https://<address> npm run dev`) plays a game in two windows; and after the room-limit check, a phone
-on mobile data can still create a room, so the server sees players' real addresses, not the edge's.*
+minutes: memory 45 → 52 MiB, CPU at most 1.4% of one core, 6 MB sent. Done by hand on Railway: `check-deploy.js`
+passes every check against `https://birdie-blasters-production.up.railway.app`, and a hole was played in two localhost
+windows against it. The `--room-limit` check, followed by a phone on mobile data creating a room (so the server sees
+players' real addresses, not the edge's), moved to step 14: a phone on mobile data cannot reach the development
+server.*
 
-**14. Frontend on Vercel**
-- Set `VITE_SERVER_URL` to the Railway address (`https://…up.railway.app`). Invite links then use the Vercel address.
-- On Railway, set `CLIENT_ORIGINS` to the Vercel address (e.g. `https://birdieblasters.vercel.app`, no slash at the
-  end), and run `check-deploy.js` with `--origin` set to it.
-- HTTPS makes the clipboard and the phone share sheet available for invites.
+**14. Frontend on Vercel** · ready; the test on Vercel is done by hand
+- **Server address:** `.env.production` (committed) sets `VITE_SERVER_URL` to the Railway server for every production
+  build, so Vercel's production and preview builds both use it, with nothing to set on Vercel. It is a public address
+  and ends up in the page anyway.
+- **Two Vercel domains** may use the server, both in `CLIENT_ORIGINS` on Railway, comma-separated: the production domain,
+  and the stable preview domain of the `online` branch, `<project>-git-online-<scope>.vercel.app`, which always shows
+  the latest push to `online`. That way online play can be tried on Vercel before the merge. Vercel also gives every
+  deployment its own address (`<project>-<hash>-<scope>.vercel.app`); a page opened there cannot reach the server, so
+  open the branch domain.
+- **Invite links** use the page's own address, so a game started on the branch domain invites to the branch domain.
+  HTTPS makes the clipboard and the phone share sheet available for them.
+- **Deployment Protection:** Vercel's Standard Protection (Vercel Authentication) covers every domain except production
+  ones, so a phone that is not logged in to Vercel gets Vercel's login instead of the game on the branch domain. For
+  the test: log in to Vercel on your own phones, or turn the protection off for previews while testing.
+- **The lobby shows the room code at once:** the code is the room's id, so the lobby no longer waits for the room
+  state. Over the internet that arrives about 0.1 s later, and a tab that had been in another room showed its old code
+  meanwhile.
 - After the merge, switch Railway's source branch to `main`.
 
-*Test: two phones on mobile data and a desktop finish a game from one invite link, including one airplane-mode
-reconnect. Then merge `online` into `main`.*
+*Test, done: the production build (`npm run build`, then `npm run preview` on localhost) in headless Edge creates a room
+on the Railway server: the lobby shows the code at once and the address bar the invite link, `/health` counts the room
+and the player, and 0 again once the tab has closed. An integration test checks that a slash at the end of a
+`CLIENT_ORIGINS` entry is ignored. To do by hand, on the `online` branch domain: `check-deploy.js` with `--origin` for
+both domains; two phones on mobile data and a desktop finish a game from one invite link (shared from a phone, copied
+on the desktop), including one airplane-mode reconnect; then, from step 13, `check-deploy.js --room-limit`, and right
+after it a phone on mobile data can still create a room. Then merge `online` into `main`, and play once on the
+production domain.*
 
 ### Later: public quick match
 
@@ -579,6 +603,8 @@ limit.
   shows whether any rooms are open.
 - Railway does not promise how long a WebSocket stays open; its edge may close one now and then. The SDK then
   reconnects by itself, and the seat is held for 60 seconds.
+- Only the Vercel production domain and the `online` branch domain may use the server. A page opened on a
+  per-deployment Vercel address only says the server could not be reached, since browsers hide why (CORS).
 - On plain `http://` (the Wi-Fi address during development) browsers allow neither the clipboard nor the share sheet;
   the lobby then shows the invite link to copy by hand.
 - Phones may pause a page in the background, so there the turn alert may only sound once the page is opened again.

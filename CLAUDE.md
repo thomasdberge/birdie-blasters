@@ -13,7 +13,9 @@ Built with Three.js and Vite.
   `npm run dev -- --host`, then open the Network address Vite prints. Unless
   `VITE_SERVER_URL` is set, the client uses port 2567 on the host that served
   the page.
-- `npm run build` writes a static site to `dist/`; `npm run preview` serves it
+- `npm run build` writes a static site to `dist/`; `npm run preview` serves it.
+  `.env.production` points builds at the game server on Railway, so a preview
+  plays online against it.
 - `node server/scripts/check-deploy.js https://<server address>` checks a
   deployed game server. Add `--room-limit` only at the end: it uses up this
   network's room limit for ten minutes.

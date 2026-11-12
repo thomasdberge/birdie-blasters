@@ -279,7 +279,7 @@ describe('the server', () => {
 
   test('in production only the pages in CLIENT_ORIGINS and pages on this computer may use the server', async () => {
     process.env.NODE_ENV = 'production';
-    process.env.CLIENT_ORIGINS = 'https://birdie.example, https://preview.example';
+    process.env.CLIENT_ORIGINS = 'https://birdie.example, https://preview.example/';
     try {
       for (const origin of ['https://birdie.example', 'https://preview.example', 'http://localhost:5173', 'http://127.0.0.1:4173'])
         expect(await allowedFor(origin)).toBe(origin);

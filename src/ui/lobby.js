@@ -74,6 +74,7 @@ function attach(joined) {
   room = joined; leaving = false; playing = false;
   history.replaceState(null, '', inviteLink(room.roomId)); // the address bar doubles as the invite link
   el.setup.hidden = true; el.lobby.hidden = false; el.link.hidden = true; el.inviteBtn.textContent = inviteLabel();
+  el.roomCode.textContent = room.roomId; // the code is the room's id; the rest of the lobby follows with the room state
   // In the lobby a lost connection frees the seat at once, so there is nothing to reconnect to until the game starts
   joined.reconnection.enabled = false;
   joined.onStateChange(s => { if (room === joined) render(s); });
