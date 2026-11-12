@@ -146,7 +146,7 @@ docs/         the online multiplayer plan
 
 ## How it was built
 
-Birdie Blasters was built with AI coding tools (Claude Code). I came up with the idea and the game design, made the
-design and technical decisions, reviewed the plans, playtested and deployed it. The online multiplayer was planned and
-built in fourteen steps, each with its own test: [docs/online-plan.md](docs/online-plan.md) holds the requirements,
+Birdie Blasters was built with AI coding tools (Claude Code). The idea, the game design and the decision to make the server authoritative are mine: a modified client should not be able to fake a hole in one, and every screen should agree on where everyone stands. The implementation decisions that follow from it came out of planning and reviewing the work with the tool.
+
+I drove the project through fourteen planned steps, each with its own test, playtested it on desktop and on phones over mobile data, and deployed it: [docs/online-plan.md](docs/online-plan.md) holds the requirements,
 every decision and why it was made, and how each step was checked. It is an example of how I plan work.
