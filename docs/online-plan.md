@@ -108,10 +108,12 @@ this file in the same commit too.
 - The weapon tilts by 60% of the pitch, held within −20° to 50°, and only on the other players' screens, so the
   one-screen game looks as before.
 - On the screen of someone watching another player's turn (while they aim, while the shot flies, during the rifle
-  choice and while it settles), any figure within 4 m of the camera is hidden, measured to its body from feet to head:
-  standing right by the camera over the shooter's shoulder, it would fill the view. The shooter's own screen keeps the
-  one-screen rule: only a figure whose head is right at the lens (their own, in first person) is hidden, so players near
-  the one aiming stay in sight.
+  choice and while it settles), any figure but the shooter within a few metres of the camera is hidden, measured to its
+  body from feet to head: standing right by the camera over the shooter's shoulder, it would fill the view. The few
+  metres are 4 on a 16:9 screen and grow as the view gets narrower, up to 8 on a phone held upright: its view is a third
+  as wide, so a figure there looks three times as big. The shooter, 10 m from the camera, and anyone next to them stay
+  in sight. The shooter's own screen keeps the one-screen rule: only a figure whose head is right at the lens (their
+  own, in first person) is hidden, so players near the one aiming stay in sight.
 
 ### Shot clock and timeouts
 
@@ -504,6 +506,14 @@ Follow-up, with step 13: on a spectator's screen, figures within 4 m of the came
 while Ann has her turn, Cy stood 1 m in front of his camera, or 2.5 m ahead and 1.5 m aside, is hidden; 7 m in front
 he is drawn, and so is Ann; on Ann's own screen, aiming in first person, Cy 3 m in front of her is drawn; when she fires,
 Cy 1 m in front of Ben's camera is still hidden while the shot flies.*
+
+Second follow-up, after step 14: on a phone held upright, players about 6 m from the spectator camera still filled a
+third of the screen, so the radius now grows as the view gets narrower, up to 8 m, and never hides the shooter.
+*Test: in headless Edge (Ann and Cy on computers, Ben on a phone-sized screen), while Ann has her turn: on Cy's screen
+Ben 1 m in front of his camera, or 2.5 m ahead and 1.5 m aside, is hidden, and 6 m in front he is drawn; on Ben's
+phone Cy 1, 6 and 7.5 m in front of the camera is hidden and 10 m in front drawn, Ann and Cy where they stand are both
+drawn, and Ann stays drawn even when stood 4 m in front of his camera; on Ann's own screen Cy 3 m in front of her is
+drawn; after her shot, Cy 6 m in front of Ben's camera is hidden.*
 
 ### Phase D: deploy (done)
 

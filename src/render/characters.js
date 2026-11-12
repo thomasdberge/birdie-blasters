@@ -148,14 +148,19 @@ export function updateChar(c, dt, p) {
 }
 export function charsSettled() { return state.players.every(p => p.char.mode === 'idle'); }
 // Hide any figure whose head is right at the lens (you, in first person), anyone who has left the game, and, on the
-// screen of someone watching another player's turn online, anyone within a few metres of the camera: they would fill
-// the view. Distances are to the figure's body axis, from its feet to the top of its head.
-const LENS_CLEAR = 2.6, WATCH_CLEAR = 4, BODY_H = 3;
+// screen of someone watching another player's turn online, anyone but the shooter within a few metres of the camera:
+// they would fill the view. Distances are to the figure's body axis, from its feet to the top of its head.
+// The few metres are WATCH_CLEAR on a 16:9 screen and grow as the view gets narrower, since a figure then fills more of
+// its width: on a phone held upright the view is a third as wide, so the radius reaches WATCH_CLEAR_MAX. That still
+// leaves the shooter, 10 m from the camera, and anyone next to them in sight.
+const LENS_CLEAR = 2.6, WATCH_CLEAR = 4, WATCH_CLEAR_MAX = 8, BODY_H = 3;
+const WIDE = Math.tan(27.5 * Math.PI / 180) * 16 / 9; // half the width of a 16:9 view at its 55° height, one unit away
 export function hideNearCamera() {
   const c = camera.position, watching = !playsSeat(state.cur) && ['watch', 'flight', 'choose', 'settle'].includes(state.phase);
+  const clear = clamp(WATCH_CLEAR * WIDE / (Math.tan(camera.fov * Math.PI / 360) * camera.aspect), WATCH_CLEAR, WATCH_CLEAR_MAX);
   for (const p of state.players) {
     const g = p.char.group, q = g.position;
     const head = Math.hypot(c.x - q.x, c.y - q.y - 2.2, c.z - q.z), body = Math.hypot(c.x - q.x, c.y - clamp(c.y, q.y, q.y + BODY_H), c.z - q.z);
-    g.visible = !p.out && head > LENS_CLEAR && !(watching && body < WATCH_CLEAR);
+    g.visible = !p.out && head > LENS_CLEAR && !(watching && p !== state.players[state.cur] && body < clear);
   }
 }
