@@ -21,8 +21,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 9 | Shot clock | `420b57b`, `7de49b9` |
 | 10 | Disconnects and reconnecting | `a1dc4bc` |
 | 11 | Between holes and the end | `aeb5cd8` |
-| 12 | Live aim for spectators | done (hash added with step 13) |
-| 13 | Game server on Fly.io | to do |
+| 12 | Live aim for spectators | `20c9787`, follow-up with step 13 |
+| 13 | Game server on Railway | built and tested locally; deploying is done by hand (hash added with step 14) |
 | 14 | Frontend on Vercel | to do |
 | later | Public quick match | not planned yet |
 
@@ -47,11 +47,29 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 - **Packages:** `@colyseus/core`, `@colyseus/schema` (v5), `@colyseus/ws-transport`, `@colyseus/tools`; tests use
   `@colyseus/testing`; the browser uses `@colyseus/sdk` 0.18. Not the `colyseus` umbrella package: it pulls in
   `@colyseus/auth`, which depends on a vulnerable `elliptic`, and we need none of it.
-- **Hosting:** the game server on Fly.io (Railway is the fallback) in the region closest to Norway, Stockholm or
-  Amsterdam. Vercel cannot host it, because its functions cannot keep WebSockets open. The frontend stays on Vercel and
-  finds the server through `VITE_SERVER_URL`.
-- **One machine, rooms in memory:** deploying the server ends games in progress. Fine for now; more than one machine
-  would need Colyseus's Redis driver.
+- **Hosting:** the game server on Railway, in EU West (Amsterdam), the region closest to Norway. Railway instead of the
+  first plan, Fly.io, because there is already a Railway account: the Trial plan to begin with, Hobby before the game
+  is shared widely. Vercel cannot host the server, because its functions cannot keep WebSockets open. The frontend
+  stays on Vercel and finds the server through `VITE_SERVER_URL`.
+- **One instance, rooms in memory:** exactly one server process runs, and deploying it ends games in progress. Fine for
+  now; more than one would need Colyseus's Redis driver. Step 13 says how Railway is held to one.
+- **Railway's settings live in its dashboard**, listed in step 13. Its config file in the repo (`railway.json`) is
+  deprecated: new services cannot use it, and it stops being read on 2026-12-01. Its replacement, Infrastructure as Code
+  (`.railway/railway.ts`), needs the `railway` npm package and is applied with the Railway CLI, and its docs do not yet
+  cover the Dockerfile or watch paths. Revisit when they do.
+
+### Cost
+
+- **Hobby:** $5 a month, and that includes $5 of usage, so the server costs **$5 a month** unless it uses more. Railway
+  charges for what is used: memory $10 per GB-month, CPU $20 per vCPU-month, data sent $0.05 per GB; builds are free.
+- **Measured** (step 13, the image on the development PC, bots playing): idle, 45 MiB and next to no CPU, about
+  $0.50–1 a month. Ten four-player games at once: 52 MiB, at most 1.4% of one CPU, and 4.5 MB sent per player-hour,
+  so a player-hour costs about $0.0003, almost all of it data. Usage would pass the included $5 only at roughly 15,000
+  player-hours a month (500 a day). Rough figures: Railway meters its own way, and real players aim longer than bots.
+- **Trial:** a one-time $5 credit for 30 days (limits: 1 GB memory, shared CPU). This server uses about $1 of it; when
+  the 30 days or the credit run out, Railway stops the server until the plan is upgraded.
+- After upgrading, set a usage alert (soft limit) on the workspace's Usage page. A hard limit (at least $10) takes the
+  server offline when it is reached.
 
 ### Authority and shots
 
@@ -87,6 +105,11 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
   change a shot.
 - The weapon tilts by 60% of the pitch, held within −20° to 50°, and only on the other players' screens, so the
   one-screen game looks as before.
+- On the screen of someone watching another player's turn (while they aim, while the shot flies, during the rifle
+  choice and while it settles), any figure within 4 m of the camera is hidden, measured to its body from feet to head:
+  standing right by the camera over the shooter's shoulder, it would fill the view. The shooter's own screen keeps the
+  one-screen rule: only a figure whose head is right at the lens (their own, in first person) is hidden, so players near
+  the one aiming stay in sight.
 
 ### Shot clock and timeouts
 
@@ -191,10 +214,18 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
 
 - **Server address:** the client uses `VITE_SERVER_URL` when it is set (production). Otherwise it connects to port
   2567 on the host that served the page, so a phone on the same Wi-Fi reaches the development server.
-- **`CLIENT_IP_HEADER`:** behind a proxy, names the header that carries the real client IP (`Fly-Client-IP` on
-  Fly.io). Without it, Colyseus uses the first `X-Forwarded-For` entry, which a client can set itself, and the per-IP
-  room limit could be dodged.
-- **CORS:** Colyseus allows every origin by default. Step 13 limits it to the Vercel domain and localhost.
+- **`CLIENT_IP_HEADER`:** behind a proxy, names the header that carries the real client IP: `X-Real-IP` on Railway,
+  set in the image. Without it, Colyseus uses the first `X-Forwarded-For` entry, which a client can set itself where
+  no proxy replaces it, and the per-IP room limit could be dodged.
+- **Which pages may use the server (CORS):** Colyseus allows every origin by default. In production the server answers
+  a browser's matchmaking requests only for the pages in `CLIENT_ORIGINS` (comma-separated origins, e.g.
+  `https://birdieblasters.vercel.app`) and pages on localhost (`originAllowed` in `server/src/app.js`), so a copy of
+  the game on another site cannot use it. In development every page may, for phones on the Wi-Fi. A program that is
+  not a browser can still send anything; the room checks are what stop it. In production the server warns at start
+  when `CLIENT_ORIGINS` is not set.
+- **Health check:** `GET /health` answers `{ ok, process, rooms, players }`. `process` is this server process's id, so
+  asking a few times shows whether more than one is answering; `rooms` and `players` show whether a deploy would end
+  games.
 - **Load size:** the browser SDK is a separate chunk, loaded only when someone picks Online.
 - **Message flood:** a client that sends more than 30 messages in a second (`maxMessagesPerSecond`) is disconnected,
   and its seat is held as after any drop. A fair client sends at most 10 aims a second, a few other messages, and the
@@ -434,7 +465,7 @@ again and Ben waits; Play again takes both to the lobby with the same code and n
 first shot plays once on each screen; at the end of that game Ann leaves and Ben gets Play again; a one-screen hole still
 ends with "To hole 2".*
 
-**12. Live aim for spectators (looks only)** · done
+**12. Live aim for spectators (looks only)** · `20c9787`, follow-up with step 13
 - `shareAim()` (`src/game/online.js`) runs every frame online and sends the shooter's aim while they pick a weapon and
   aim: at most every `AIM_EVERY_MS` (100) when it has changed, and every `AIM_REPEAT_MS` (1000) anyway. The remote
   match's `aim()` adds the turn and sends nothing while the connection is lost.
@@ -462,25 +493,73 @@ has her aim and weapon again within a second; her shot plays on Ben's screen alo
 ends where the server put it. With Ben's aims blocked on his turn, Ann sees him unchanged, and his shot still plays with
 his real aim and weapon and ends where the server put it. A one-screen turn shows no tilt.*
 
-### Phase D: deploy (to do)
+Follow-up, with step 13: on a spectator's screen, figures within 4 m of the camera are hidden (`hideNearCamera` in
+`src/render/characters.js`, see Live aim above). *Test: in headless Edge (Ann, Ben and Cy online), on Ben's screen
+while Ann has her turn, Cy stood 1 m in front of his camera, or 2.5 m ahead and 1.5 m aside, is hidden; 7 m in front
+he is drawn, and so is Ann; on Ann's own screen, aiming in first person, Cy 3 m in front of her is drawn; when she fires,
+Cy 1 m in front of Ben's camera is still hidden while the shot flies.*
 
-**13. Game server on Fly.io**
-- **Image:** a Dockerfile on Node 22 or newer that copies `package.json`, `package-lock.json`, `server/` and
-  `src/core/`, and installs only the server workspace's production dependencies.
-- **Environment:** `NODE_ENV=production` and `CLIENT_IP_HEADER=Fly-Client-IP`.
-- **Fly app:**
-  - Region Stockholm (`arn`) or Amsterdam (`ams`); check which Fly offers at the time.
-  - Exactly one machine that never stops while rooms are open, since rooms live in memory.
-  - HTTPS and `wss://` through Fly's proxy.
-- **Server:** a health endpoint, plus CORS limited to the Vercel domain and localhost (override
-  `matchMaker.controller.getCorsHeaders`).
+### Phase D: deploy (in progress)
 
-*Test: the health endpoint answers; a local client plays a game against the deployed server; a forged
-`X-Forwarded-For` does not get around the room limit.*
+**13. Game server on Railway** · built and tested locally; the deploy is done by hand
+- **Image:** `Dockerfile` at the root, which Railway finds and builds by itself: `node:24-alpine`, only the server
+  workspace's production dependencies (`npm ci --omit=dev --workspace=server`: no Three.js or Vite; the browser SDK
+  comes along, as the browser needs it too), then `src/core/` and `server/src/`. It runs as the `node` user and starts
+  `node` itself rather than npm, so the stop signal reaches the server, which closes its rooms and exits. A
+  `.dockerignore` lets in only those files.
+- **Environment:** the image sets `NODE_ENV=production` and `CLIENT_IP_HEADER=X-Real-IP`. Railway sets `PORT`, which
+  the server listens on. `CLIENT_ORIGINS` is a Railway variable, set in step 14 when the Vercel address is known.
+- **Client IP:** Railway's docs name `X-Real-IP` as the header for the client's address, and Railway staff say (June
+  2026) that the edge replaces both `X-Real-IP` and `X-Forwarded-For` on every request, whatever the client sent.
+  That is a forum answer, not a documented promise, so `server/scripts/check-deploy.js --room-limit` tries it against
+  the live server. Requests over Railway's private network skip the edge, but this project has no other services.
+- **One instance:** Railway runs one replica per region unless told to run more. The service has one region, 1
+  replica and Serverless off (a sleeping server would answer the first request after a pause with an error). Railway
+  keeps one deployment per service: on a deploy, the old server runs on until the new one answers `/health`, then
+  traffic moves to the new one and the old one is stopped, ending its games. `check-deploy.js` asks `/health` twelve
+  times and fails if more than one process answers.
+- **Deploys only for server changes:** watch paths limit Railway's automatic deploys to the files in the image, so a
+  change to the browser game does not end games in progress.
+- **Railway settings** (service settings in the dashboard; the labels may differ slightly):
+
+  | Setting | Value |
+  |---|---|
+  | Source branch | `online` (`main` once step 14 merges it) |
+  | Builder | Dockerfile (found at the root) |
+  | Watch paths | `/Dockerfile`, `/.dockerignore`, `/package.json`, `/package-lock.json`, `/server/package.json`, `/server/src/**`, `/src/core/**` |
+  | Region and replicas | EU West (Amsterdam), 1 replica; no other region |
+  | Serverless | off |
+  | Healthcheck path | `/health` |
+  | Restart policy | On failure |
+  | Public networking | Generate Domain; Railway picks the port the server listens on |
+  | Variables | `CLIENT_ORIGINS`: none until step 14 |
+
+- **Server:** `GET /health` and the CORS rule (see Network and security). Colyseus's own `/__healthcheck` only says
+  "OK".
+- **`server/scripts/check-deploy.js <address> [--origin <page>] [--room-limit]`** checks a deployed server from this
+  computer: the health check, one process, that a page elsewhere may not use it but localhost and each `--origin` may,
+  and that two players can start a game and both get the shot the server decided. With `--room-limit` it then creates
+  rooms with a different forged `X-Forwarded-For` and `X-Real-IP` each time until it is turned down, and fails if
+  that takes more than `CREATE_LIMIT` + 1 tries. That uses up the limit, so nobody on this network can create a room
+  on that server for ten minutes.
+
+*Test, done: integration tests check that `/health` names the process and counts rooms and players, and that in
+production a preflight from the pages in `CLIENT_ORIGINS`, localhost and 127.0.0.1 is allowed while one from another
+site, the same site on `http://`, a look-alike domain or the origin `null` is not, and that in development a Wi-Fi
+address is allowed. The image, built with Docker Desktop and run with `PORT=8080`, passes `check-deploy.js` (health,
+one process, CORS, a shot by two players) and stops in 0.7 s with exit code 0 on `docker stop`. Without an edge in
+front, its `--room-limit` check fails as it should: 11 rooms with forged headers. Ten four-player bot games for two
+minutes: memory 45 → 52 MiB, CPU at most 1.4% of one core, 6 MB sent. To do by hand, after the deploy:
+`check-deploy.js` passes against the Railway address, with `--room-limit` last; a local client
+(`VITE_SERVER_URL=https://<address> npm run dev`) plays a game in two windows; and after the room-limit check, a phone
+on mobile data can still create a room, so the server sees players' real addresses, not the edge's.*
 
 **14. Frontend on Vercel**
-- Set `VITE_SERVER_URL` to the Fly address. Invite links then use the Vercel address.
+- Set `VITE_SERVER_URL` to the Railway address (`https://…up.railway.app`). Invite links then use the Vercel address.
+- On Railway, set `CLIENT_ORIGINS` to the Vercel address (e.g. `https://birdieblasters.vercel.app`, no slash at the
+  end), and run `check-deploy.js` with `--origin` set to it.
 - HTTPS makes the clipboard and the phone share sheet available for invites.
+- After the merge, switch Railway's source branch to `main`.
 
 *Test: two phones on mobile data and a desktop finish a game from one invite link, including one airplane-mode
 reconnect. Then merge `online` into `main`.*
@@ -496,7 +575,10 @@ limit.
 
 - Colyseus reports a full room and a started game with the same "locked" message, so the client says "full, or its
   game has already started".
-- Rooms live in one server process: a deploy or crash ends games in progress.
+- Rooms live in one server process: a deploy or crash ends games in progress. Before pushing a server change, `/health`
+  shows whether any rooms are open.
+- Railway does not promise how long a WebSocket stays open; its edge may close one now and then. The SDK then
+  reconnects by itself, and the seat is held for 60 seconds.
 - On plain `http://` (the Wi-Fi address during development) browsers allow neither the clipboard nor the share sheet;
   the lobby then shows the invite link to copy by hand.
 - Phones may pause a page in the background, so there the turn alert may only sound once the page is opened again.
@@ -530,3 +612,9 @@ limit.
   otherwise by its ping timeout (about 6 seconds).
 - Since the shot clock, a turn passes after 30 seconds, also in browser tests. Software rendering is slow, so tests must
   not assume the game stays on one turn while they wait (the step 7 and 8 tests check against whatever turn it is).
+- On Windows, stop a server or browser started for a test with `taskkill /PID <pid> /T /F`. `/T` ends its child
+  processes too: npm runs the server as a child that otherwise keeps the port, and Edge runs many.
+- The server image locally: Docker Desktop is installed but not running; start it, then `docker build -t birdie-server .`
+  and `docker run -p 2567:8080 -e PORT=8080 birdie-server`, and stop it again with `docker desktop stop`. Without
+  Railway's edge in front, the image believes any `X-Real-IP`, so a load test can give each game its own address to
+  stay under the room limit.

@@ -147,3 +147,15 @@ export function updateChar(c, dt, p) {
   if (c.ring.visible) { const s = 1 + Math.sin(clock.t * 5) * 0.06; c.ring.scale.set(s, s, s); }
 }
 export function charsSettled() { return state.players.every(p => p.char.mode === 'idle'); }
+// Hide any figure whose head is right at the lens (you, in first person), anyone who has left the game, and, on the
+// screen of someone watching another player's turn online, anyone within a few metres of the camera: they would fill
+// the view. Distances are to the figure's body axis, from its feet to the top of its head.
+const LENS_CLEAR = 2.6, WATCH_CLEAR = 4, BODY_H = 3;
+export function hideNearCamera() {
+  const c = camera.position, watching = !playsSeat(state.cur) && ['watch', 'flight', 'choose', 'settle'].includes(state.phase);
+  for (const p of state.players) {
+    const g = p.char.group, q = g.position;
+    const head = Math.hypot(c.x - q.x, c.y - q.y - 2.2, c.z - q.z), body = Math.hypot(c.x - q.x, c.y - clamp(c.y, q.y, q.y + BODY_H), c.z - q.z);
+    g.visible = !p.out && head > LENS_CLEAR && !(watching && body < WATCH_CLEAR);
+  }
+}

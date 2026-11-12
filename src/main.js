@@ -1,6 +1,5 @@
 // Entry point: wires up the UI, runs the main loop and boots the game.
 
-import * as THREE from 'three';
 import { STEP } from './core/physics.js';
 import { $ } from './platform.js';
 import { applyHolds, holds } from './game/aim.js';
@@ -8,7 +7,7 @@ import { awayList, holdControls, initOnline, nextHoleLeft, shareAim, shotClockLe
 import { playShotStep } from './game/shot.js';
 import { clock, distToCup, game, state, timers, world } from './game/state.js';
 import { cam, fpView, updateCamera } from './render/camera.js';
-import { charsSettled, updateChar } from './render/characters.js';
+import { charsSettled, hideNearCamera, updateChar } from './render/characters.js';
 import { updateParts } from './render/particles.js';
 import { updateProjectileVisual } from './render/projectiles.js';
 import { camera, renderer, resizeRenderer, scene, vmCamera, vmScene } from './render/scene.js';
@@ -26,7 +25,6 @@ import { updateReticle } from './ui/reticle.js';
 import { setNextHoleClock } from './ui/scorecard.js';
 import { initSetup } from './ui/setup.js';
 
-const tmpV = new THREE.Vector3();
 function resize() { resizeRenderer(); sizeMap(); }
 
 let last = performance.now(), mapTick = 0;
@@ -51,10 +49,7 @@ function frame(now) {
   if (state.waitFn && charsSettled()) { const f = state.waitFn; state.waitFn = null; f(); }
   updateCamera(dt);
   const inGame = !ui.hud.hidden;
-  if (inGame) {
-    // Hide any figure whose head is right at the lens (you, in first person), and anyone who has left the game
-    for (const p of state.players) { const g = p.char.group; tmpV.set(g.position.x, g.position.y + 2.2, g.position.z); g.visible = !p.out && camera.position.distanceTo(tmpV) > 2.6; }
-  }
+  if (inGame) hideNearCamera();
   // Name tags and the flag marker keep their screen size when zoomed
   const inv = 1 / state.zoomF;
   for (const p of state.players) p.char.label.scale.set(0.15 * inv, 0.0375 * inv, 1);

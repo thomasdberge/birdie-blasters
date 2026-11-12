@@ -260,6 +260,39 @@ describe('turning requests down', () => {
   });
 });
 
+describe('the server', () => {
+  const url = path => `http://127.0.0.1:${colyseus.server.port}${path}`;
+  const health = async () => (await fetch(url('/health'))).json();
+  // The origin a browser is told may create a room, when it asks first (a CORS preflight)
+  async function allowedFor(origin) {
+    const res = await fetch(url(`/matchmake/create/${ROOM_NAME}`), { method: 'OPTIONS', headers: { origin } });
+    return res.headers.get('access-control-allow-origin') ?? undefined;
+  }
+
+  test('the health check names the server process and counts its rooms and players', async () => {
+    const before = await health();
+    expect(before).toEqual({ ok: true, process: expect.any(String), rooms: expect.any(Number), players: expect.any(Number) });
+    const ann = await create('Ann');
+    await join(ann.roomId, 'Ben');
+    expect(await health()).toEqual({ ...before, rooms: before.rooms + 1, players: before.players + 2 });
+  });
+
+  test('in production only the pages in CLIENT_ORIGINS and pages on this computer may use the server', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.CLIENT_ORIGINS = 'https://birdie.example, https://preview.example';
+    try {
+      for (const origin of ['https://birdie.example', 'https://preview.example', 'http://localhost:5173', 'http://127.0.0.1:4173'])
+        expect(await allowedFor(origin)).toBe(origin);
+      for (const origin of ['https://evil.example', 'http://birdie.example', 'https://birdie.example.evil.example', 'http://localhost.evil.example', 'null'])
+        expect(await allowedFor(origin)).toBeUndefined();
+    } finally { process.env.NODE_ENV = 'test'; delete process.env.CLIENT_ORIGINS; }
+  });
+
+  test('in development any page may, so a phone on the Wi-Fi reaches it', async () => {
+    expect(await allowedFor('http://192.168.0.11:5173')).toBe('http://192.168.0.11:5173');
+  });
+});
+
 describe('the match', () => {
   test('starting deals the first hole: every client sees the same hole, wind and positions as the server', async () => {
     const rooms = await startGame('Ann', 'Ben', 'Cy');

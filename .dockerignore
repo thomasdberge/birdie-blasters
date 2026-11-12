@@ -1,0 +1,7 @@
+# The game server's image needs only these (see Dockerfile)
+*
+!package.json
+!package-lock.json
+!server/package.json
+!server/src
+!src/core
