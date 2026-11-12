@@ -75,9 +75,10 @@ Built with Three.js and Vite.
 ## Roadmap
 1. Done: split the prototype into a Vite project with separate files for
    physics, weapons, courses, rendering and UI.
-2. Deploy the frontend (Vercel or Netlify).
-3. Live online multiplayer: rooms with invite links, a shot clock per turn,
-   and a server that runs the physics and decides every shot. In progress on
-   the `online` branch; the plan, its progress and every decision so far are in
-   `docs/online-plan.md` (update it in the same commit as each step).
+2. Done: the frontend is on Vercel.
+3. Done: live online multiplayer: private rooms with invite links, a shot
+   clock per turn, and a game server on Railway that runs the physics and
+   decides every shot. The plan, every decision and what comes next (public
+   quick match) are in `docs/online-plan.md`; update it in the same commit as
+   each change to online play.
 4. Real 3D character models (glTF) later.

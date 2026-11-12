@@ -3,8 +3,9 @@
 Live online play for Birdie Blasters: private rooms with invite links, a 30-second shot clock, and a game server that
 runs the physics and decides every shot. This file is the plan, its progress and every decision made along the way.
 
-**Workflow.** All work happens on the branch `online`. Each step is committed once its test passes, and this file is
-updated in the same commit. `online` is merged into `main` when phase D (deployment) works.
+**Workflow.** Steps 1–14 were built on the branch `online`, each committed once its test passed, with this file updated
+in the same commit. Phase D (deployment) worked, and `online` is merged into `main`. Later work on online play updates
+this file in the same commit too.
 
 ## Status
 
@@ -22,8 +23,8 @@ updated in the same commit. `online` is merged into `main` when phase D (deploym
 | 10 | Disconnects and reconnecting | `a1dc4bc` |
 | 11 | Between holes and the end | `aeb5cd8` |
 | 12 | Live aim for spectators | `20c9787`, follow-up with step 13 |
-| 13 | Game server on Railway | `b8a1c7c`, verified on Railway; its room-limit check moved to step 14 |
-| 14 | Frontend on Vercel | ready; the test on Vercel is done by hand (hash added with the merge) |
+| 13 | Game server on Railway | `b8a1c7c` |
+| 14 | Frontend on Vercel | `3730359`; `online` merged into `main` |
 | later | Public quick match | not planned yet |
 
 ## Requirements
@@ -224,10 +225,10 @@ reserved. Colyseus sends the code as the HTTP status of the response, so it must
   a browser's matchmaking requests only for the pages in `CLIENT_ORIGINS` (comma-separated origins, e.g.
   `https://birdieblasters.vercel.app`; a slash at the end is ignored) and pages on localhost (`originAllowed` in
   `server/src/app.js`), so a copy of the game on another site cannot use it. On Railway it holds the Vercel production
-  domain and the stable preview domain of the `online` branch (step 14), so online play can be tested before the merge.
-  Vercel's per-deployment URLs are not in it. In development every page may, for phones on the Wi-Fi. A program that
-  is not a browser can still send anything; the room checks are what stop it. In production the server warns at start
-  when `CLIENT_ORIGINS` is not set.
+  domain and the stable preview domain of the `online` branch (step 14), so online play can be tried there before it
+  reaches `main`. Vercel's per-deployment URLs are not in it. In development every page may, for phones on the Wi-Fi.
+  A program that is not a browser can still send anything; the room checks are what stop it. In production the server
+  warns at start when `CLIENT_ORIGINS` is not set.
 - **Health check:** `GET /health` answers `{ ok, process, rooms, players }`. `process` is this server process's id, so
   asking a few times shows whether more than one is answering; `rooms` and `players` show whether a deploy would end
   games.
@@ -283,7 +284,7 @@ menu and lobby. The start rule moved into the room state (`minPlayers`). After t
 "Starting the game…": that is where step 7 takes over. *Test: four browsers including a phone-sized one on the Wi-Fi
 address, then two PC tabs and a phone by hand.*
 
-### Phase C: the server decides every shot (in progress)
+### Phase C: the server decides every shot (done)
 
 **7. The server runs the match** · `51c8609`
 - On start, the room creates `makeMatch(seat names, Math.random)` with seats in lobby order, so seat i in the room is
@@ -504,7 +505,7 @@ while Ann has her turn, Cy stood 1 m in front of his camera, or 2.5 m ahead and 
 he is drawn, and so is Ann; on Ann's own screen, aiming in first person, Cy 3 m in front of her is drawn; when she fires,
 Cy 1 m in front of Ben's camera is still hidden while the shot flies.*
 
-### Phase D: deploy (in progress)
+### Phase D: deploy (done)
 
 **13. Game server on Railway** · `b8a1c7c`, verified on Railway
 - **Image:** `Dockerfile` at the root, which Railway finds and builds by itself: `node:24-alpine`, only the server
@@ -557,10 +558,10 @@ front, its `--room-limit` check fails as it should: 11 rooms with forged headers
 minutes: memory 45 → 52 MiB, CPU at most 1.4% of one core, 6 MB sent. Done by hand on Railway: `check-deploy.js`
 passes every check against `https://birdie-blasters-production.up.railway.app`, and a hole was played in two localhost
 windows against it. The `--room-limit` check, followed by a phone on mobile data creating a room (so the server sees
-players' real addresses, not the edge's), moved to step 14: a phone on mobile data cannot reach the development
-server.*
+players' real addresses, not the edge's), moved to step 14, where it passed: a phone on mobile data cannot reach the
+development server.*
 
-**14. Frontend on Vercel** · ready; the test on Vercel is done by hand
+**14. Frontend on Vercel** · `3730359`
 - **Server address:** `.env.production` (committed) sets `VITE_SERVER_URL` to the Railway server for every production
   build, so Vercel's production and preview builds both use it, with nothing to set on Vercel. It is a public address
   and ends up in the page anyway.
@@ -577,16 +578,17 @@ server.*
 - **The lobby shows the room code at once:** the code is the room's id, so the lobby no longer waits for the room
   state. Over the internet that arrives about 0.1 s later, and a tab that had been in another room showed its old code
   meanwhile.
-- After the merge, switch Railway's source branch to `main`.
+- After the merge, Railway's source branch is switched to `main`, so the server deploys from there.
 
-*Test, done: the production build (`npm run build`, then `npm run preview` on localhost) in headless Edge creates a room
-on the Railway server: the lobby shows the code at once and the address bar the invite link, `/health` counts the room
-and the player, and 0 again once the tab has closed. An integration test checks that a slash at the end of a
-`CLIENT_ORIGINS` entry is ignored. To do by hand, on the `online` branch domain: `check-deploy.js` with `--origin` for
-both domains; two phones on mobile data and a desktop finish a game from one invite link (shared from a phone, copied
-on the desktop), including one airplane-mode reconnect; then, from step 13, `check-deploy.js --room-limit`, and right
-after it a phone on mobile data can still create a room. Then merge `online` into `main`, and play once on the
-production domain.*
+*Test: the production build (`npm run build`, then `npm run preview` on localhost) in headless Edge creates a room on
+the Railway server: the lobby shows the code at once and the address bar the invite link, `/health` counts the room and
+the player, and 0 again once the tab has closed. An integration test checks that a slash at the end of a
+`CLIENT_ORIGINS` entry is ignored. By hand, on the `online` branch domain: `check-deploy.js` passes every check with
+`--origin` for both domains; a full game with a desktop and phones on mobile data joining by invite link, including a
+20-second airplane-mode reconnect, worked throughout. Then, from step 13, `check-deploy.js --room-limit` passed: with
+forged headers the server refused the 6th room, since this network had already created rooms in those ten minutes. A
+phone on mobile data could still create a room right after, so the server sees players' real addresses. Then `online`
+was merged into `main`.*
 
 ### Later: public quick match
 
