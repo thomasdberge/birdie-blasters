@@ -1,9 +1,18 @@
-// The start screen: player count and names.
+// The start screen: one screen (player count and names) or online.
 
-import { $, store } from '../platform.js';
+import { readRoomCode } from '../core/protocol.js';
+import { $, labelFont, store } from '../platform.js';
 import { sfx } from '../audio/sfx.js';
 import { state, STYLES } from '../game/state.js';
-import { newGame, startHole } from '../game/turns.js';
+import { newGame } from '../game/turns.js';
+import { rejoin, showInvite } from './lobby.js';
+
+function setMode(mode) {
+  document.querySelectorAll('#modeSeg button').forEach(b => b.setAttribute('aria-checked', b.dataset.mode === mode ? 'true' : 'false'));
+  $('#localSetup').hidden = $('#startBtn').hidden = mode !== 'local';
+  $('#onlineSetup').hidden = mode !== 'online';
+  store.set('birdieblasters-mode', mode);
+}
 
 const savedNames = store.get('birdieblasters-names') || [];
 function renderNames() {
@@ -18,6 +27,12 @@ function renderNames() {
   }
 }
 export function initSetup() {
+  document.querySelectorAll('#modeSeg button').forEach(b => b.addEventListener('click', () => setMode(b.dataset.mode)));
+  // An invite link (?room=CODE) opens the online tab with the code filled in. After a reload it is still in the address
+  // bar, and a tab that was playing in that room takes its seat back.
+  const invite = readRoomCode(new URLSearchParams(location.search).get('room'));
+  setMode(invite || store.get('birdieblasters-mode') === 'online' ? 'online' : 'local');
+  if (invite) { showInvite(invite); rejoin(invite); }
   document.querySelectorAll('#countSeg button').forEach(b => b.addEventListener('click', () => {
     state.count = +b.dataset.n;
     document.querySelectorAll('#countSeg button').forEach(x => x.setAttribute('aria-checked', x === b ? 'true' : 'false'));
@@ -30,7 +45,7 @@ export function initSetup() {
     sfx.unlock();
     const names = [...document.querySelectorAll('#names input')].map((inp, i) => (inp.value.trim() || STYLES[i].name).slice(0, 16));
     store.set('birdieblasters-names', names); store.set('birdieblasters-count', state.count);
-    try { await Promise.race([document.fonts.load('64px "Lilita One"'), new Promise(r => setTimeout(r, 1200))]); } catch (e) { /* fallback font is fine */ }
-    newGame(names); startHole(0);
+    await labelFont();
+    newGame(names);
   });
 }

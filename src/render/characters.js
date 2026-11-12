@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { angLerp, clamp, lerp } from '../core/math.js';
 import { CHAR_S } from '../core/rules.js';
 import { sfx } from '../audio/sfx.js';
-import { clock, state, world } from '../game/state.js';
+import { clock, playsSeat, state, world } from '../game/state.js';
 import { puff } from './particles.js';
 import { camera, phong, scene } from './scene.js';
 import { makeWeaponModels } from './weaponModels.js';
@@ -73,7 +73,7 @@ export function makeChar(style, name) {
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.08; ring.visible = false; group.add(ring);
   const label = makeLabel(name, style.color); label.position.y = 3.65 * CHAR_S; group.add(label);
   scene.add(group);
-  return { group, inner, pupils, weapons, ring, label, prop: hat.userData.prop || null, mode: 'idle', target: null, fly: null, poofT: 0, recoil: 0, phase: Math.random() * 6, weapon: null };
+  return { group, inner, pupils, weapons, hold, ring, label, prop: hat.userData.prop || null, mode: 'idle', target: null, fly: null, poofT: 0, recoil: 0, phase: Math.random() * 6, weapon: null };
 }
 export function showWeapon(c, id) { if (c.weapon === id) return; Object.entries(c.weapons).forEach(([k, m]) => { m.visible = k === id; }); c.weapon = id; }
 
@@ -122,12 +122,16 @@ export function updateChar(c, dt, p) {
     else inner.position.y = Math.sin(clock.t * 3 + c.phase) * 0.05;
   }
   c.recoil = Math.max(0, c.recoil - dt * 4); inner.position.z = -c.recoil * 0.35;
-  // face direction
+  // face direction: the current player faces where they aim
+  const aiming = p && state.players[state.cur] === p && ['aim', 'pick', 'watch', 'flight'].includes(state.phase);
   let want = g.rotation.y;
-  if (p && state.players[state.cur] === p && (state.phase === 'aim' || state.phase === 'pick' || state.phase === 'flight')) want = state.yaw;
+  if (aiming) want = state.yaw;
   else if (p && p.done) want = Math.atan2(camera.position.x - g.position.x, camera.position.z - g.position.z);
   else if (state.cur >= 0 && state.players[state.cur]) { const q = state.players[state.cur].char.group.position; if (q !== g.position) want = Math.atan2(q.x - g.position.x, q.z - g.position.z); }
   if (c.mode !== 'fly') g.rotation.y = angLerp(g.rotation.y, want, 1 - Math.exp(-dt * 8));
+  // Online, the others also watch the shooter's weapon tilt up and down with their aim
+  const tilt = aiming && !playsSeat(state.cur) ? -clamp(state.pitch, -20, 50) * 0.6 * Math.PI / 180 : 0;
+  c.hold.rotation.x = lerp(c.hold.rotation.x, tilt, 1 - Math.exp(-dt * 10));
   // googly pupils: a random glance now and then, constant rattling while moving
   const busy = c.mode !== 'idle';
   const glance = clock.t > (c.nextGlance || 0);
@@ -143,3 +147,15 @@ export function updateChar(c, dt, p) {
   if (c.ring.visible) { const s = 1 + Math.sin(clock.t * 5) * 0.06; c.ring.scale.set(s, s, s); }
 }
 export function charsSettled() { return state.players.every(p => p.char.mode === 'idle'); }
+// Hide any figure whose head is right at the lens (you, in first person), anyone who has left the game, and, on the
+// screen of someone watching another player's turn online, anyone within a few metres of the camera: they would fill
+// the view. Distances are to the figure's body axis, from its feet to the top of its head.
+const LENS_CLEAR = 2.6, WATCH_CLEAR = 4, BODY_H = 3;
+export function hideNearCamera() {
+  const c = camera.position, watching = !playsSeat(state.cur) && ['watch', 'flight', 'choose', 'settle'].includes(state.phase);
+  for (const p of state.players) {
+    const g = p.char.group, q = g.position;
+    const head = Math.hypot(c.x - q.x, c.y - q.y - 2.2, c.z - q.z), body = Math.hypot(c.x - q.x, c.y - clamp(c.y, q.y, q.y + BODY_H), c.z - q.z);
+    g.visible = !p.out && head > LENS_CLEAR && !(watching && body < WATCH_CLEAR);
+  }
+}

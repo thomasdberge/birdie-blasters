@@ -97,7 +97,7 @@ export function initInput() {
   });
   window.addEventListener('blur', () => { holds.clear(); cancelCharge(); });
   ui.bagBtn.addEventListener('click', () => { if (state.phase === 'aim') openPick(false); });
-  $('#holeCard').addEventListener('click', () => { if (['aim', 'pick', 'flight', 'settle'].includes(state.phase)) showBoard('peek'); });
+  $('#holeCard').addEventListener('click', () => { if (['aim', 'pick', 'watch', 'flight', 'settle'].includes(state.phase)) showBoard('peek'); });
   function setMuteLabel() { ui.mute.textContent = sfx.muted ? 'Sound off' : 'Sound on'; ui.mute.setAttribute('aria-pressed', sfx.muted ? 'true' : 'false'); }
   ui.mute.addEventListener('click', () => { sfx.setMuted(!sfx.muted); setMuteLabel(); });
   setMuteLabel();

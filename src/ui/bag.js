@@ -5,13 +5,13 @@ import { MOUSE } from '../platform.js';
 import { sfx } from '../audio/sfx.js';
 import { holds, setZoom } from '../game/aim.js';
 import { cancelCharge } from '../game/shot.js';
-import { distToCup, state, world } from '../game/state.js';
+import { distToCup, game, state, world } from '../game/state.js';
 import { autoWeapon } from '../game/turns.js';
 import { showWeapon } from '../render/characters.js';
 import { vmShow } from '../render/viewmodel.js';
 import { ui } from './elements.js';
 import { fmt1, genitive, SURF_NAME } from './format.js';
-import { setControls, setHint, windText } from './hud.js';
+import { setControls, setHint, turnAlert, windText } from './hud.js';
 import { exitLock, mouseMode, requestLock } from './pointerLock.js';
 import { invalidateReticle } from './reticle.js';
 
@@ -41,7 +41,8 @@ export function openPick(fresh) {
   state.phase = 'pick';
   const surf = M.surface(p.ball.x, p.ball.z), rec = autoWeapon(p);
   if (fresh) selectWeapon(rec);
-  ui.pickTitle.textContent = state.players.length > 1 ? `${genitive(p.name)} turn · stroke ${p.strokes + 1}` : `Stroke ${p.strokes + 1}`;
+  ui.pickTitle.textContent = game.online ? `Your turn · stroke ${p.strokes + 1}`
+    : state.players.length > 1 ? `${genitive(p.name)} turn · stroke ${p.strokes + 1}` : `Stroke ${p.strokes + 1}`;
   ui.pickInfo.textContent = `${Math.round(distToCup(p))} m to the flag · ${SURF_NAME[surf] || surf} · wind ${fmt1(M.wind.speed)} m/s ${windText()}`;
   wbtns.forEach((b, k) => {
     b.classList.toggle('rec', k === rec);
@@ -57,7 +58,7 @@ export function openPick(fresh) {
 }
 export function confirmPick(i) {
   if (state.phase !== 'pick') return;
-  sfx.unlock();
+  sfx.unlock(); turnAlert(false);
   selectWeapon(i);
   ui.pick.hidden = true; ui.hud.classList.remove('picking');
   state.phase = 'aim'; setControls(true); invalidateReticle();

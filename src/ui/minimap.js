@@ -48,7 +48,7 @@ export function drawMap() {
     g.setLineDash([3, 3]); g.strokeStyle = '#f7f6ee'; g.lineWidth = 1.5; g.beginPath(); g.moveTo(a, b); g.lineTo(c, d); g.stroke(); g.setLineDash([]);
   }
   state.players.forEach((p, i) => {
-    if (p.done) return;
+    if (p.done || p.out) return;
     const pos = p.char.group.position, [a, b] = st.P(pos.x, pos.z);
     g.beginPath(); g.arc(a, b, i === state.cur ? 4.5 : 3.5, 0, Math.PI * 2); g.fillStyle = p.color; g.fill(); g.strokeStyle = '#1b2214'; g.lineWidth = 1.5; g.stroke();
   });
