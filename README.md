@@ -141,7 +141,7 @@ src/net/      talking to the game server
 src/audio/    synthesised sound effects
 server/       the Colyseus game server (an npm workspace) and its tests
 tests/        rules, simulator and golden shot tests
-docs/         the online multiplayer plan
+docs/         the online multiplayer plan and known issues
 ```
 
 ## How it was built

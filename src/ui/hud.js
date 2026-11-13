@@ -33,11 +33,19 @@ export function setHint() {
   let lie = '';
   if (surf === 'sand') lie = W.sandProof ? 'Bunker, but the flare gun loses no power here. ' : 'You are in the bunker: −45% power. The flare gun loses nothing. ';
   else if (surf === 'rough' && !W.sandProof) lie = 'Rough: −15% power. ';
+  const touch = !mouseMode() && COARSE;
   const controls = mouseMode() ? 'The mouse aims. Hold the left button for power and release to fire. Right button zooms. Q switches weapon, 1–8 for a quick switch. Esc frees the mouse.'
-    : COARSE ? 'Drag to look around and aim. ▲ ▼ change the angle. Hold Fire for power.'
+    : touch ? 'Drag to look around and aim. ▲ ▼ change the angle. Hold Fire for power.'
     : 'Drag with the mouse or use the arrow keys to aim. Hold Space for power. Q switches weapon.';
-  const base = state.shotsFired < 2 ? controls : `${W.name} (${W.club}, precision ${W.precision}/10). ${W.tip}`;
-  ui.hint.textContent = lie + base;
+  if (state.shotsFired >= 2) { ui.hint.textContent = lie + `${W.name} (${W.club}, precision ${W.precision}/10). ${W.tip}`; return; }
+  ui.hint.textContent = lie + controls;
+  // Phones held sideways have two short lines for the hint: style.css swaps in a version of the touch one that fits
+  if (touch) {
+    const full = document.createElement('span'), short = document.createElement('span');
+    full.className = 'hint-full'; full.textContent = controls;
+    short.className = 'hint-short'; short.textContent = 'Drag to aim. Hold Fire to shoot.';
+    ui.hint.textContent = lie; ui.hint.append(full, short);
+  }
 }
 export function setControls(on) {
   [ui.fire, ui.left, ui.right, ui.up, ui.down, ui.zoom, ui.bagBtn].forEach(b => { b.disabled = !on; });

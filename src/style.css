@@ -146,6 +146,7 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
 .aimbtn{pointer-events:auto;flex:1 1 0;min-width:40px;max-width:56px;height:56px;border-radius:14px;background:var(--olive);border:2px solid var(--line);display:grid;place-items:center;box-shadow:0 3px 0 var(--shadow);touch-action:none;color:var(--cream);padding:0}
 .aimbtn svg{width:22px;height:22px}
 .hint{pointer-events:none;max-width:min(100%,460px);text-align:center;font-size:12.5px;line-height:1.35;color:var(--cream);background:var(--scrim);border-radius:10px;padding:6px 10px;text-wrap:balance}
+.hint-short{display:none}
 .fire{pointer-events:auto;position:relative;overflow:hidden;width:116px;height:66px;flex:none;border:0;border-radius:18px;background:var(--blaze);color:var(--blaze-ink);box-shadow:0 5px 0 var(--blaze-deep);touch-action:none;display:grid;place-content:center;transition:transform .06s,box-shadow .06s}
 .fire .fill{position:absolute;left:0;right:0;bottom:0;height:0%;background:var(--fill)}
 .fire .f-lbl{position:relative;font-family:var(--font-display);font-size:26px;line-height:1;text-transform:uppercase;letter-spacing:.02em}
@@ -184,6 +185,9 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
   .toast,.hint{margin-inline:192px 128px}
   /* Transparent borders instead of vertical padding, so a clipped third line cannot show in the padding */
   .hint{font-size:12px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;padding-block:0;border-block:6px solid transparent}
+  /* The first touch hint, shortened so it always fits (src/ui/hud.js) */
+  .hint-full{display:none}
+  .hint-short{display:inline}
   /* While the rifle's bullet that counts is picked, the disabled aim pad, Fire and the hint make room for the choice,
      which stays clear of Zoom and Switch weapon */
   .choose:not([hidden])~.hint,.choose:not([hidden])~.controls{display:none}
