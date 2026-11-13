@@ -161,6 +161,48 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
 .callout.show{animation:pop 2.6s ease-out forwards}
 @keyframes pop{0%{opacity:0;transform:scale(.4) rotate(-6deg)}10%{opacity:1;transform:scale(1.12) rotate(2deg)}18%{transform:scale(1) rotate(0)}82%{opacity:1}100%{opacity:0;transform:translateY(-10px)}}
 
+/* Phones held sideways (touch, landscape, at most 500 px tall, down to about 300 px with the browser's bars): the
+   controls move to the corners for the thumbs, like in mobile shooters. Aim pad bottom left; Fire bottom right with
+   Zoom and Switch weapon above it; a smaller minimap top right with the angle ladder beside it; the readout beside
+   the crosshair; and a hint of at most two lines between the thumbs. Clear of the notch and home indicator. */
+@media (pointer:coarse) and (orientation:landscape) and (max-height:500px){
+  .hud{--hud-l:max(16px,env(safe-area-inset-left,0px));--hud-r:max(16px,env(safe-area-inset-right,0px));--hud-b:max(12px,env(safe-area-inset-bottom,0px))}
+  /* Sound stays under the minimap; at 300 px tall the right edge is then full: minimap, Sound, Switch weapon, Zoom and
+     Fire, 6 px apart */
+  #map{width:72px;height:100px}
+  #bagBtn,#zoomBtn{position:absolute;right:var(--hud-r)}
+  #zoomBtn{bottom:calc(var(--hud-b) + 74px)}
+  #bagBtn{bottom:calc(var(--hud-b) + 108px)}
+  /* The ladder stands level with the minimap, 21 px to its left */
+  .ret-ladder{display:grid;top:23px;right:calc(var(--hud-r) + 93px);transform:translateX(50%)}
+  .rl-bar{height:40px}
+  .rl-cap{display:none}
+  .ret-read{top:50%;left:calc(50% + 64px);transform:translateY(-50%);justify-items:start}
+  /* The bottom group is pinned to the bottom edge, whatever the hole card above takes. The toast and hint sit between
+     the aim pad (180 px) and Fire (116 px). */
+  .hud-bottom{position:absolute;left:var(--hud-l);right:var(--hud-r);bottom:var(--hud-b)}
+  .toast,.hint{margin-inline:192px 128px}
+  .hint{font-size:12px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  /* While the rifle's bullet that counts is picked, the disabled aim pad, Fire and the hint make room for the choice,
+     which stays clear of Zoom and Switch weapon */
+  .choose:not([hidden])~.hint,.choose:not([hidden])~.controls{display:none}
+  .choose{max-width:min(520px,calc(100% - 256px));padding:8px 10px 10px}
+  .choose-q{font-size:13px}
+  .cbtn{padding:5px 4px 6px}
+  .cbtn b{font-size:22px}
+  .controls{position:absolute;left:0;right:0;bottom:0;width:auto;max-width:none}
+  .pad{display:grid;grid-template-columns:repeat(3,56px);grid-template-rows:repeat(2,56px);gap:6px;flex:none}
+  #upBtn{grid-area:1/2}
+  #leftBtn{grid-area:2/1}
+  #downBtn{grid-area:2/2}
+  #rightBtn{grid-area:2/3}
+  /* The golf bag fills the height it has, four weapons to a row, without effect texts, so it never scrolls */
+  .pick{top:0;align-items:flex-end;padding-block:12px var(--hud-b)}
+  .pick-card{max-height:100%;gap:8px;padding:10px 10px 8px}
+  .bag{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .pick-foot,.bi-fx{display:none}
+}
+
 /* ---------- Screens ---------- */
 .screen{position:absolute;inset:0;overflow-y:auto;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--scrim)}
 .panel{width:min(100%,440px);background:var(--olive);border:2px solid var(--line);border-radius:22px;padding:22px 20px 20px;box-shadow:0 8px 0 var(--shadow);display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
