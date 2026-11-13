@@ -182,7 +182,8 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
      the aim pad (180 px) and Fire (116 px). */
   .hud-bottom{position:absolute;left:var(--hud-l);right:var(--hud-r);bottom:var(--hud-b)}
   .toast,.hint{margin-inline:192px 128px}
-  .hint{font-size:12px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  /* Transparent borders instead of vertical padding, so a clipped third line cannot show in the padding */
+  .hint{font-size:12px;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;padding-block:0;border-block:6px solid transparent}
   /* While the rifle's bullet that counts is picked, the disabled aim pad, Fire and the hint make room for the choice,
      which stays clear of Zoom and Switch weapon */
   .choose:not([hidden])~.hint,.choose:not([hidden])~.controls{display:none}
@@ -201,6 +202,30 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
   .pick-card{max-height:100%;gap:8px;padding:10px 10px 8px}
   .bag{grid-template-columns:repeat(4,minmax(0,1fr))}
   .pick-foot,.bi-fx{display:none}
+}
+/* Sideways and under 300 px tall (360 px wide Android phones in Chrome, down to about 250 px): the hole card puts the
+   hole and its name on one line, the aim buttons shrink to 52 px, and Switch weapon and Zoom move left of Fire, since
+   the right edge no longer fits the minimap, Sound, both of them and Fire above each other */
+@media (pointer:coarse) and (orientation:landscape) and (max-height:299px){
+  .holecard{grid-template-columns:auto minmax(0,1fr);align-items:baseline;column-gap:10px;row-gap:1px;padding:6px 10px 7px}
+  .hc-row{grid-column:1}
+  .hc-row b{font-size:14px}
+  .hc-name{grid-column:2;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hc-player,.hc-stats,.hc-wind{grid-column:1/-1}
+  .hc-player{margin-top:1px}
+  .hc-stats b{font-size:15px}
+  .pad{grid-template-columns:repeat(3,52px);grid-template-rows:repeat(2,52px)}
+  .aimbtn{height:52px}
+  #bagBtn,#zoomBtn{right:calc(var(--hud-r) + 124px)}
+  #zoomBtn{bottom:var(--hud-b)}
+  #bagBtn{bottom:calc(var(--hud-b) + 34px)}
+  .toast,.hint{margin-inline:180px 252px}
+  /* The bullet choice takes the aim pad's and Fire's place, up to Switch weapon and Zoom */
+  .choose{width:auto;max-width:none;justify-self:stretch;margin-right:252px}
+  .pick-card{gap:6px;padding:8px 8px 6px}
+  .pick-head h2{font-size:20px}
+  .bag{gap:8px 6px}
+  .bagitem{padding:5px 8px 6px}
 }
 
 /* ---------- Screens ---------- */
