@@ -151,8 +151,9 @@ export function charsSettled() { return state.players.every(p => p.char.mode ===
 // screen of someone watching another player's turn online, anyone but the shooter within a few metres of the camera:
 // they would fill the view. Distances are to the figure's body axis, from its feet to the top of its head.
 // The few metres are WATCH_CLEAR on a 16:9 screen and grow as the view gets narrower, since a figure then fills more of
-// its width: on a phone held upright the view is a third as wide, so the radius reaches WATCH_CLEAR_MAX. That still
-// leaves the shooter, 10 m from the camera, and anyone next to them in sight.
+// its width: on a phone held upright the view is about half as wide (see the field of view in scene.js), so
+// the radius is 6–7 m, and WATCH_CLEAR_MAX caps it for narrower views. That still leaves the shooter, 10 m from the
+// camera, and anyone next to them in sight.
 const LENS_CLEAR = 2.6, WATCH_CLEAR = 4, WATCH_CLEAR_MAX = 8, BODY_H = 3;
 const WIDE = Math.tan(27.5 * Math.PI / 180) * 16 / 9; // half the width of a 16:9 view at its 55° height, one unit away
 export function hideNearCamera() {

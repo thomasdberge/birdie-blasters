@@ -10,7 +10,7 @@ import { cam, fpView, updateCamera } from './render/camera.js';
 import { charsSettled, hideNearCamera, updateChar } from './render/characters.js';
 import { updateParts } from './render/particles.js';
 import { updateProjectileVisual } from './render/projectiles.js';
-import { camera, renderer, resizeRenderer, scene, vmCamera, vmScene } from './render/scene.js';
+import { baseFov, camera, renderer, resizeRenderer, scene, vmCamera, vmScene } from './render/scene.js';
 import { updateLandMark } from './render/scopeMarker.js';
 import { updateViewmodel } from './render/viewmodel.js';
 import { animateWorld, buildWorld } from './render/world.js';
@@ -50,8 +50,9 @@ function frame(now) {
   updateCamera(dt);
   const inGame = !ui.hud.hidden;
   if (inGame) hideNearCamera();
-  // Name tags and the flag marker keep their screen size when zoomed
-  const inv = 1 / state.zoomF;
+  // Name tags and the flag marker shrink with the view when zoomed, so they keep about their screen size (1 / zoom on
+  // screens with 55°, where zooming divides the view)
+  const inv = camera.fov / baseFov;
   for (const p of state.players) p.char.label.scale.set(0.15 * inv, 0.0375 * inv, 1);
   if (world.flag) world.flag.marker.scale.set(0.05 * inv, 0.05 * inv, 1);
   updateReticle();

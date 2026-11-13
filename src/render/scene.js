@@ -1,6 +1,7 @@
 // Three.js renderer, scene, camera and lights.
 
 import * as THREE from 'three';
+import { clamp } from '../core/math.js';
 import { $ } from '../platform.js';
 import { state } from '../game/state.js';
 
@@ -26,12 +27,24 @@ export const vmScene = new THREE.Scene(), vmCamera = new THREE.PerspectiveCamera
 vmScene.add(new THREE.HemisphereLight(0xe2f4ff, 0x56763a, 0.7));
 const vmSun = new THREE.DirectionalLight(0xfff1d2, 0.6); vmSun.position.set(1, 2, 1.5); vmScene.add(vmSun);
 vmScene.add(vmRoot);
-export let baseFov = 55;
+// The cameras' field of view is vertical. It follows from a sideways view of FOV_WIDE°, kept between FOV_MIN° and
+// FOV_MAX° tall. Screens wider than 1.35:1 (desktops, phones held sideways) get exactly 55° and see 85–95° sideways. A
+// phone held upright gets 95° and sees 55–65° sideways, where 55° would leave it 30–40°; beyond 95° the edges stretch
+// too much.
+const FOV_WIDE = 70, FOV_MIN = 55, FOV_MAX = 95;
+// Zooming narrows the view from at most ZOOM_FROM° tall, what a phone held upright had before its view widened, so the
+// scope magnifies distant players there as much as it did. Screens with 55° divide that by the weapon's zoom.
+const ZOOM_FROM = 64;
+export let baseFov = FOV_MIN;
+// The world camera's field of view at zoom factor zf: 1 unzoomed, up to the weapon's zoom (3 or more)
+export function viewFov(zf) {
+  return (baseFov + (Math.min(baseFov, ZOOM_FROM) - baseFov) * clamp((zf - 1) / 2, 0, 1)) / zf;
+}
 export function resizeRenderer() {
   const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
   renderer.setSize(w, h, false);
-  baseFov = w / h < 0.8 ? 64 : 55;
-  camera.aspect = w / h; camera.fov = baseFov / state.zoomF; camera.updateProjectionMatrix();
+  baseFov = clamp(2 * Math.atan(Math.tan(FOV_WIDE * Math.PI / 360) * h / w) * 180 / Math.PI, FOV_MIN, FOV_MAX);
+  camera.aspect = w / h; camera.fov = viewFov(state.zoomF); camera.updateProjectionMatrix();
   vmCamera.aspect = w / h; vmCamera.fov = baseFov; vmCamera.updateProjectionMatrix();
 }
 

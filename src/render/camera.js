@@ -6,7 +6,7 @@ import { clamp, lerp } from '../core/math.js';
 import { WEAPONS } from '../core/weapons.js';
 import { REDUCED } from '../platform.js';
 import { clock, playsSeat, state, world } from '../game/state.js';
-import { baseFov, camera } from './scene.js';
+import { camera, viewFov } from './scene.js';
 
 export const cam = { pos: new THREE.Vector3(60, 60, 60), look: new THREE.Vector3(), dPos: new THREE.Vector3(), dLook: new THREE.Vector3(), k: 3, shake: 0, hdir: new THREE.Vector3(0, 0, -1), arrived: false };
 export function shake(a) { if (!REDUCED) cam.shake = Math.max(cam.shake, a); }
@@ -60,7 +60,7 @@ function applyCamera(dt) {
   if (cam.shake > 0.01) { camera.position.x += (Math.random() - 0.5) * cam.shake; camera.position.y += (Math.random() - 0.5) * cam.shake; cam.shake *= Math.exp(-dt * 5); }
   camera.lookAt(cam.look);
   const zf = lerp(state.zoomF, state.zoom && state.phase === 'aim' ? (WEAPONS[state.weapon].zoom || 3) : 1, 1 - Math.exp(-dt * 10));
-  if (Math.abs(zf - state.zoomF) > 0.001) { state.zoomF = zf; camera.fov = baseFov / zf; camera.updateProjectionMatrix(); }
+  if (Math.abs(zf - state.zoomF) > 0.001) { state.zoomF = zf; camera.fov = viewFov(zf); camera.updateProjectionMatrix(); }
 }
 export function fpView() { return ((state.phase === 'aim' || state.phase === 'pick') && cam.arrived) || ownLaunch(); }
 // The shooter's own screen stays first person while the shot leaves the barrel, and online until the server has sent it
