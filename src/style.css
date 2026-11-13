@@ -38,7 +38,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
 
 /* ---------- HUD ---------- */
-.hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;gap:10px;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+/* The HUD keeps clear of the notch, status bar and home indicator: each edge is the safe-area inset where that is larger */
+.hud{--hud-t:max(12px,env(safe-area-inset-top,0px));--hud-b:max(12px,env(safe-area-inset-bottom,0px));--hud-l:max(16px,env(safe-area-inset-left,0px));--hud-r:max(16px,env(safe-area-inset-right,0px));position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;gap:10px;padding:var(--hud-t) var(--hud-r) var(--hud-b) var(--hud-l)}
 .hud-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .hud-left{display:grid;justify-items:start;gap:8px;min-width:0}
 /* Online: players who lost the connection, with the time they have left to come back */
@@ -78,13 +79,13 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
 .ret-move{position:absolute;inset:0}
 .rl-cap{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 /* The angle ladder (148 px tall) is centred 46% down. On short windows it moves down to stay clear of the minimap's
-   buttons above it, which end 262 px down (12 + map 148 + 6 + three 28 px buttons with 6 px gaps). Below 438 px it no
-   longer fits under them: a shorter one without its caption (78 px) sits right below them, and below 368 px it is
-   hidden, since the angle also shows under the crosshair. */
-.ret-ladder{position:absolute;right:max(16px,env(safe-area-inset-right,0px));top:max(46%,352px);transform:translateY(-50%);display:grid;justify-items:center;gap:5px;font-family:var(--font-data);font-size:11px;font-weight:700;color:var(--cream);text-shadow:var(--outline-sm);font-variant-numeric:tabular-nums}
+   buttons above it, which end 250 px below the top padding (map 148 + 6 + three 28 px buttons with 6 px gaps; 262 px
+   down without a safe-area inset). Below 438 px it no longer fits under them: a shorter one without its caption (78 px)
+   sits right below them, and below 368 px it is hidden, since the angle also shows under the crosshair. */
+.ret-ladder{position:absolute;right:var(--hud-r);top:max(46%,calc(var(--hud-t) + 340px));transform:translateY(-50%);display:grid;justify-items:center;gap:5px;font-family:var(--font-data);font-size:11px;font-weight:700;color:var(--cream);text-shadow:var(--outline-sm);font-variant-numeric:tabular-nums}
 .rl-bar{position:relative;display:block;width:6px;height:92px;border-radius:3px;background:var(--scrim);box-shadow:inset 0 0 0 1.5px var(--cream)}
 .rl-bar b{position:absolute;left:50%;bottom:50%;width:18px;height:5px;border-radius:3px;background:var(--fill);transform:translate(-50%,50%);box-shadow:0 0 0 1.5px var(--ink)}
-@media (max-height:437px){.ret-ladder{top:278px;transform:none}.rl-bar{height:40px}.rl-cap{display:none}}
+@media (max-height:437px){.ret-ladder{top:calc(var(--hud-t) + 266px);transform:none}.rl-bar{height:40px}.rl-cap{display:none}}
 @media (max-height:367px){.ret-ladder{display:none}}
 .ret-read{position:absolute;left:50%;top:calc(50% + 64px);transform:translateX(-50%);display:grid;justify-items:center;gap:1px;font-family:var(--font-data);font-weight:700;color:var(--cream);text-shadow:var(--outline-sm);white-space:nowrap}
 .ret-read b{font-size:20px;font-variant-numeric:tabular-nums}
@@ -94,7 +95,7 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
 .toast{pointer-events:none;max-width:min(92%,420px);text-align:center;background:var(--scrim);color:var(--cream);font-weight:600;font-size:13.5px;line-height:1.35;border-radius:10px;padding:7px 12px;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
 .toast.show{opacity:1;transform:none}
 /* Golf bag: opens at the start of every turn with the recommended weapon marked */
-.pick{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;padding-block:0 14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));pointer-events:none}
+.pick{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:center;padding-block:0 max(14px,env(safe-area-inset-bottom,0px));padding-left:var(--hud-l);padding-right:var(--hud-r);pointer-events:none}
 .pick-card{pointer-events:auto;width:min(100%,780px);max-height:62vh;overflow-y:auto;background:var(--olive);border:2px solid var(--line);border-radius:18px;padding:12px 12px 10px;box-shadow:0 6px 0 var(--shadow);display:grid;gap:12px}
 .pick-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:4px 12px}
 .pick-head h2{margin:0;font-family:var(--font-display);font-weight:400;font-size:24px;line-height:1.05;color:var(--cream)}
@@ -166,7 +167,6 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
    Zoom and Switch weapon above it; a smaller minimap top right with the angle ladder beside it; the readout beside
    the crosshair; and a hint of at most two lines between the thumbs. Clear of the notch and home indicator. */
 @media (pointer:coarse) and (orientation:landscape) and (max-height:500px){
-  .hud{--hud-l:max(16px,env(safe-area-inset-left,0px));--hud-r:max(16px,env(safe-area-inset-right,0px));--hud-b:max(12px,env(safe-area-inset-bottom,0px))}
   /* Sound stays under the minimap; at 300 px tall the right edge is then full: minimap, Sound, Switch weapon, Zoom and
      Fire, 6 px apart */
   #map{width:72px;height:100px}
@@ -174,7 +174,7 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
   #zoomBtn{bottom:calc(var(--hud-b) + 74px)}
   #bagBtn{bottom:calc(var(--hud-b) + 108px)}
   /* The ladder stands level with the minimap, 21 px to its left */
-  .ret-ladder{display:grid;top:23px;right:calc(var(--hud-r) + 93px);transform:translateX(50%)}
+  .ret-ladder{display:grid;top:calc(var(--hud-t) + 11px);right:calc(var(--hud-r) + 93px);transform:translateX(50%)}
   .rl-bar{height:40px}
   .rl-cap{display:none}
   .ret-read{top:50%;left:calc(50% + 64px);transform:translateY(-50%);justify-items:start}
@@ -204,7 +204,7 @@ button:focus-visible{outline:3px solid var(--cream);outline-offset:2px}
 }
 
 /* ---------- Screens ---------- */
-.screen{position:absolute;inset:0;overflow-y:auto;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding-block:20px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--scrim)}
+.screen{position:absolute;inset:0;overflow-y:auto;display:grid;grid-template-columns:minmax(0,1fr);place-items:center;padding-block:max(20px,env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-bottom,0px));padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));background:var(--scrim)}
 .panel{width:min(100%,440px);background:var(--olive);border:2px solid var(--line);border-radius:22px;padding:22px 20px 20px;box-shadow:0 8px 0 var(--shadow);display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
 .kicker{margin:0;font-family:var(--font-data);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .logo{margin:-4px 0 0;font-family:var(--font-display);font-weight:400;font-size:clamp(50px,15vw,70px);line-height:.9;color:var(--blaze);text-shadow:0 5px 0 var(--blaze-ink);letter-spacing:.01em}
